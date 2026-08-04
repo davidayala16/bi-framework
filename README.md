@@ -1,5 +1,7 @@
 # bi-framework
 
+[![verify-metrics](https://github.com/davidayala16/bi-framework/actions/workflows/verify-metrics.yml/badge.svg?branch=main)](https://github.com/davidayala16/bi-framework/actions/workflows/verify-metrics.yml)
+
 **A reference architecture for AI-augmented BI teams** — one Git repo as
 the shared source of truth for metric definitions, dashboards, and bots,
 with an AI coding agent acting as a governed "mini analyst" against it
@@ -130,8 +132,8 @@ CLAUDE.md                   the contract Claude reads before touching this repo
 ## A private counterpart
 
 A company-specific version of this playbook — real metrics, real platform
-integrations, real rollout notes — is maintained privately and isn't part
-of this repo by design. See [`docs/PRIVATE_PLAYBOOK.md`](docs/PRIVATE_PLAYBOOK.md).
+integrations, real rollout notes — is planned, kept intentionally separate
+from this public repo. See [`docs/PRIVATE_PLAYBOOK.md`](docs/PRIVATE_PLAYBOOK.md).
 
 ## License
 
