@@ -179,6 +179,39 @@ metrics:
       FROM revenue_90d
     verified_by: tests/test_metrics_registry.py::test_ltv_90d
 
+  - id: acquisition_funnel
+    name: Acquisition Funnel by Channel
+    category: Acquisition
+    description: >
+      For each acquisition channel, how many customers ended up Never
+      Purchased / One-Time Buyer / Repeat Buyer. A cohort metric — uses
+      the customer's original acquisition_channel (fixed at signup), not
+      the per-order channel used elsewhere in the registry, and isn't
+      filterable by dimension for the same reason cac_by_channel isn't.
+    grain: channel x outcome
+    unit: count
+    owner: growth-team
+    filterable_dimensions: []
+    formula_sql: |
+      WITH order_counts AS (
+        SELECT customer_id, COUNT(*) AS order_count
+        FROM orders
+        GROUP BY customer_id
+      )
+      SELECT
+        c.acquisition_channel AS channel,
+        CASE
+          WHEN oc.order_count IS NULL THEN 'Never Purchased'
+          WHEN oc.order_count = 1 THEN 'One-Time Buyer'
+          ELSE 'Repeat Buyer'
+        END AS outcome,
+        COUNT(*) AS customer_count
+      FROM customers c
+      LEFT JOIN order_counts oc ON oc.customer_id = c.customer_id
+      GROUP BY c.acquisition_channel, outcome
+      ORDER BY c.acquisition_channel, outcome
+    verified_by: tests/test_metrics_registry.py::test_acquisition_funnel
+
   - id: churn_rate_90d
     name: 90-Day Churn Rate
     category: Retention

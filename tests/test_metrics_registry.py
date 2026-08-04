@@ -99,17 +99,29 @@ def test_churn_rate_90d(warehouse, registry):
     assert value == 27.3
 
 
+def test_acquisition_funnel(warehouse, registry):
+    df = run_metric(warehouse, registry, "acquisition_funnel")
+    assert set(df["outcome"]) == {"Never Purchased", "One-Time Buyer", "Repeat Buyer"}
+    assert set(df["channel"]) == {
+        "direct", "email", "organic_search", "paid_social", "referral",
+    }
+    # every (channel, outcome) pair present, and it partitions all customers
+    assert len(df) == 15
+    assert df["customer_count"].sum() == 600
+
+
 def test_unfilterable_metrics_reject_filters():
-    """Cohort metrics (cac, ltv, churn) declare filterable_dimensions: []
-    on purpose — their logic doesn't compose with a row-level WHERE. This
-    just pins that the registry keeps declaring them that way."""
+    """Cohort metrics (cac, ltv, churn, acquisition_funnel) declare
+    filterable_dimensions: [] on purpose — their logic doesn't compose with
+    a row-level WHERE. This just pins that the registry keeps declaring
+    them that way."""
     import yaml
     from pathlib import Path
 
     reg = yaml.safe_load(
         open(Path(__file__).resolve().parents[1] / "metrics" / "registry.yaml")
     )
-    fixed_ids = {"cac_by_channel", "ltv_90d", "churn_rate_90d"}
+    fixed_ids = {"cac_by_channel", "ltv_90d", "churn_rate_90d", "acquisition_funnel"}
     for metric in reg["metrics"]:
         if metric["id"] in fixed_ids:
             assert metric["filterable_dimensions"] == []

@@ -4,6 +4,12 @@ Instructions for any Claude Code session working in this repo. Read this
 before generating dashboard code, bot code, or anything that touches a
 metric.
 
+This file is Claude Code's entry point into this repo's governance
+contract — the contract itself (the registry, the resolver, the tests)
+has no Claude dependency and applies identically to any other agent, or
+to a human writing code by hand. See
+`docs/ARCHITECTURE.md#agent-agnostic-by-construction`.
+
 ## What this repo is
 
 A reference architecture for AI-augmented BI teams, built on a synthetic
