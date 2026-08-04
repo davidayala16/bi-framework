@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/warehouse.duckdb
+data/synthetic/
+platforms/slack-bot/output/
+.DS_Store
+.Rhistory
+.Rproj.user/

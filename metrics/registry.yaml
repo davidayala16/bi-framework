@@ -1,0 +1,211 @@
+# Metrics Registry
+#
+# This file is the single source of truth for how every metric in this
+# repo is defined. Claude (and any human contributor) MUST resolve metrics
+# by reading this file — never by re-deriving a formula inline in a
+# dashboard, bot, or ad hoc query. See docs/METRICS_REGISTRY.md for the
+# governance rules and docs/VERIFICATION.md for how `verified_by` is
+# enforced in CI.
+#
+# base_fact_sql
+#   The one shared, order-item-grain fact query every filterable metric is
+#   built on. Filters (channel/region/category) are applied here, as a
+#   parameterized WHERE clause, never string-interpolated. Cohort metrics
+#   below (cac_by_channel, ltv_90d, churn_rate_90d) don't route through it —
+#   their logic depends on cross-time joins that don't compose with a
+#   simple row-level filter, so they're marked filterable: false instead of
+#   faked.
+#
+# Schema per metric:
+#   id                    - stable snake_case identifier
+#   name                  - human-readable label
+#   category              - Revenue | Retention | Acquisition
+#   description           - what it measures and why it's defined this way
+#   grain                 - the row-level unit the formula aggregates over
+#   unit                  - USD | percent | ratio | count
+#   owner                 - team/role accountable for the definition
+#   filterable_dimensions - dimensions this metric accepts (subset of
+#                           channel/region/category), or [] if the metric's
+#                           logic doesn't support ad hoc filtering
+#   formula_sql_template  - used when filterable_dimensions is non-empty;
+#                           wraps base_fact_sql with a {where} placeholder
+#                           filled in via parameterized substitution
+#   formula_sql           - used when filterable_dimensions is empty; fixed
+#                           query, no filter support
+#   verified_by           - pytest node id gating changes to this definition
+
+base_fact_sql: |
+  SELECT
+    oi.order_item_id,
+    o.order_id,
+    o.order_date,
+    o.customer_id,
+    o.channel,
+    c.region,
+    p.category,
+    p.product_id,
+    oi.quantity,
+    oi.unit_price,
+    oi.quantity * oi.unit_price AS revenue
+  FROM order_items oi
+  JOIN orders o ON o.order_id = oi.order_id
+  JOIN customers c ON c.customer_id = o.customer_id
+  JOIN products p ON p.product_id = oi.product_id
+
+metrics:
+  - id: net_revenue
+    name: Net Revenue
+    category: Revenue
+    description: >
+      Total revenue recognized across all order line items in the period.
+      Gross of returns — there is no returns table in the synthetic
+      dataset, so treat this as a simplified top-line figure.
+    grain: order_item
+    unit: USD
+    owner: analytics-team
+    filterable_dimensions: [channel, region, category]
+    formula_sql_template: |
+      WITH fact_orders AS (
+        SELECT * FROM ({base_fact_sql}) f WHERE {where}
+      )
+      SELECT ROUND(SUM(revenue), 2) AS net_revenue
+      FROM fact_orders
+    verified_by: tests/test_metrics_registry.py::test_net_revenue
+
+  - id: aov
+    name: Average Order Value
+    category: Revenue
+    description: >
+      Net revenue divided by the number of distinct orders. Computed at the
+      order grain, not the line-item grain, so multi-item orders aren't
+      double counted.
+    grain: order
+    unit: USD
+    owner: analytics-team
+    filterable_dimensions: [channel, region, category]
+    formula_sql_template: |
+      WITH fact_orders AS (
+        SELECT * FROM ({base_fact_sql}) f WHERE {where}
+      )
+      SELECT ROUND(SUM(order_total) / COUNT(*), 2) AS aov
+      FROM (
+        SELECT order_id, SUM(revenue) AS order_total
+        FROM fact_orders
+        GROUP BY order_id
+      ) per_order
+    verified_by: tests/test_metrics_registry.py::test_aov
+
+  - id: repeat_purchase_rate
+    name: Repeat Purchase Rate
+    category: Retention
+    description: >
+      Share of customers with 2+ distinct orders (matching the filter),
+      out of all customers with at least one order matching the filter.
+    grain: customer
+    unit: percent
+    owner: analytics-team
+    filterable_dimensions: [channel, region, category]
+    formula_sql_template: |
+      WITH fact_orders AS (
+        SELECT * FROM ({base_fact_sql}) f WHERE {where}
+      )
+      SELECT ROUND(
+        100.0 * SUM(CASE WHEN order_count >= 2 THEN 1 ELSE 0 END) / COUNT(*),
+        1
+      ) AS repeat_purchase_rate_pct
+      FROM (
+        SELECT customer_id, COUNT(DISTINCT order_id) AS order_count
+        FROM fact_orders
+        GROUP BY customer_id
+      ) per_customer
+    verified_by: tests/test_metrics_registry.py::test_repeat_purchase_rate
+
+  - id: cac_by_channel
+    name: Customer Acquisition Cost by Channel
+    category: Acquisition
+    description: >
+      Total marketing spend on a channel divided by the number of distinct
+      customers who placed a first order on that channel, over the full
+      dataset window. A cohort metric — not filterable by dimension, since
+      spend and first-order attribution are already channel-grained.
+    grain: channel
+    unit: USD
+    owner: growth-team
+    filterable_dimensions: []
+    formula_sql: |
+      SELECT
+        s.channel,
+        ROUND(SUM(s.spend) / NULLIF(COUNT(DISTINCT f.customer_id), 0), 2) AS cac
+      FROM marketing_spend s
+      LEFT JOIN (
+        SELECT customer_id, MIN(order_date) AS first_order_date, channel
+        FROM orders
+        GROUP BY customer_id, channel
+      ) f ON f.channel = s.channel
+      GROUP BY s.channel
+      ORDER BY s.channel
+    verified_by: tests/test_metrics_registry.py::test_cac_by_channel
+
+  - id: ltv_90d
+    name: 90-Day Customer Lifetime Value
+    category: Revenue
+    description: >
+      Average net revenue generated per customer within 90 days of their
+      first order. A simplified LTV proxy — no discounting, no margin
+      adjustment — intentionally, to keep the definition auditable at a
+      glance rather than modeling-accurate. A cohort metric — not
+      filterable by dimension in this demo.
+    grain: customer
+    unit: USD
+    owner: analytics-team
+    filterable_dimensions: []
+    formula_sql: |
+      WITH first_orders AS (
+        SELECT customer_id, MIN(order_date) AS first_order_date
+        FROM orders
+        GROUP BY customer_id
+      ),
+      revenue_90d AS (
+        SELECT
+          o.customer_id,
+          SUM(oi.quantity * oi.unit_price) AS revenue
+        FROM orders o
+        JOIN order_items oi ON oi.order_id = o.order_id
+        JOIN first_orders fo ON fo.customer_id = o.customer_id
+        WHERE o.order_date <= fo.first_order_date + INTERVAL 90 DAY
+        GROUP BY o.customer_id
+      )
+      SELECT ROUND(AVG(revenue), 2) AS ltv_90d
+      FROM revenue_90d
+    verified_by: tests/test_metrics_registry.py::test_ltv_90d
+
+  - id: churn_rate_90d
+    name: 90-Day Churn Rate
+    category: Retention
+    description: >
+      Share of customers whose most recent order is more than 90 days
+      before the dataset's max order date, i.e. customers who have gone
+      quiet for a full quarter. A snapshot definition, not a rolling one,
+      and not filterable by dimension in this demo.
+    grain: customer
+    unit: percent
+    owner: analytics-team
+    filterable_dimensions: []
+    formula_sql: |
+      WITH last_orders AS (
+        SELECT customer_id, MAX(order_date) AS last_order_date
+        FROM orders
+        GROUP BY customer_id
+      ),
+      bounds AS (
+        SELECT MAX(order_date) AS as_of_date FROM orders
+      )
+      SELECT ROUND(
+        100.0 * SUM(
+          CASE WHEN lo.last_order_date <= b.as_of_date - INTERVAL 90 DAY
+          THEN 1 ELSE 0 END
+        ) / COUNT(*),
+        1
+      ) AS churn_rate_90d_pct
+      FROM last_orders lo, bounds b
+    verified_by: tests/test_metrics_registry.py::test_churn_rate_90d

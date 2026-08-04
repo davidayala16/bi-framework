@@ -1,0 +1,6 @@
+duckdb>=1.5,<2
+pandas>=2,<4
+pyyaml>=6,<7
+matplotlib>=3.8,<4
+shiny>=1.0,<2
+pytest>=8,<10

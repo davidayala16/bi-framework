@@ -1,0 +1,34 @@
+name: verify-metrics
+
+# The gate referenced throughout metrics/registry.yaml's `verified_by`
+# fields. Any change touching a metric formula, or the synthetic data
+# generator, has to pass the golden-query tests before it can merge.
+
+on:
+  pull_request:
+    paths:
+      - "metrics/**"
+      - "data/generate_synthetic_data.py"
+      - "tests/**"
+      - "requirements.txt"
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build synthetic warehouse
+        run: python data/generate_synthetic_data.py
+
+      - name: Run metrics registry verification
+        run: pytest tests/ -v
