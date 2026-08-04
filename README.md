@@ -65,7 +65,8 @@ the same registry entry the Sankey above uses:
 
 ## Run it yourself
 
-Takes under five minutes, no external services or credentials required.
+Takes under five minutes. Requires Python 3.11+, no external services or
+credentials.
 
 ```bash
 git clone https://github.com/davidayala16/bi-framework.git
