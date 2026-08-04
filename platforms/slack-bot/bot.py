@@ -167,7 +167,7 @@ def _render_image(metric: dict, df):
         col_order = [o for o in OUTCOME_ORDER if o in pivot.columns]
         pivot = pivot[col_order]
 
-        fig, ax = plt.subplots(figsize=(7, 4.5))
+        fig, ax = plt.subplots(figsize=(7.5, 5.8))
         fig.patch.set_facecolor(SURFACE)
         bottoms = [0] * len(pivot)
         for outcome in col_order:
@@ -180,14 +180,14 @@ def _render_image(metric: dict, df):
             bottoms = [b + v for b, v in zip(bottoms, values)]
         _style_axes(ax)
         ax.set_ylabel("Customers", color=INK_SECONDARY, fontsize=11)
+        plt.setp(ax.get_xticklabels(), rotation=0, ha="center")
         ax.legend(
-            loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=3,
-            frameon=False, fontsize=9, labelcolor=INK_SECONDARY,
+            loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3,
+            frameon=False, fontsize=9.5, labelcolor=INK_SECONDARY,
         )
         ax.margins(y=0.1)
-        plt.xticks(rotation=25, ha="right")
-        fig.suptitle(metric["name"], color=INK_PRIMARY, fontsize=13, y=0.98)
-        fig.tight_layout(rect=(0, 0.05, 1, 0.95))
+        fig.suptitle(metric["name"], color=INK_PRIMARY, fontsize=13, y=0.97)
+        fig.tight_layout(rect=(0, 0.1, 1, 0.94))
         return fig
 
     label_col, value_col = df.columns[0], df.columns[-1]

@@ -66,7 +66,7 @@ the same registry entry the Sankey above uses:
 Takes under five minutes, no external services or credentials required.
 
 ```bash
-git clone <this-repo-url>
+git clone https://github.com/davidayala16/bi-framework.git
 cd bi-framework
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
