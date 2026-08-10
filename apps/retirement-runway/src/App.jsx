@@ -21,6 +21,20 @@ const BRASS = "#C9A24B";
 const TEAL = "#5FA8A0";
 const RUST = "#C77B5F";
 
+// Ceiling for compounding loops below — with aggressive enough inputs (high return, high raise,
+// many years), unclamped compounding can overflow past Number.MAX_VALUE to Infinity, which then
+// crashes recharts' tick calculation (and unmounts the whole app, since there's no error boundary
+// around the chart). $1 quadrillion is far past any realistic scenario, so clamping here only
+// affects already-nonsensical inputs, not real projections.
+const MAX_BALANCE = 1e12;
+
+// Ceiling for any loop bounded by user-typed ages/years. Several fields (retirement age,
+// horizon age, current age) directly size a simulation loop with no upper bound — an extra
+// typed digit (or a value typed transiently while another field is being edited) can turn a
+// ~65-iteration loop into a multi-billion-iteration one, freezing the tab synchronously long
+// enough to look like a crash. 200 years covers every realistic scenario with huge headroom.
+const MAX_YEARS = 200;
+
 const RETIRE_CHIPS = [55, 60, 65];
 const TREATMENTS = ["Roth (after-tax)", "Traditional (pre-tax)", "Triple tax-advantaged", "Taxable"];
 const ACCOUNT_TYPES = [
@@ -67,6 +81,7 @@ function simulateRaiseSchedule({
   currentBalance, salary, raisePct, matureRaisePct = null, raiseSlowdownYears = null, salaryCap = null,
   startContribution, raiseAllocationPct, realPreReturn, years, stopContributingYear = Infinity,
 }) {
+  years = Math.min(Math.max(Math.trunc(years) || 0, 0), MAX_YEARS);
   const monthlyRate = realPreReturn / 100 / 12;
   let balance = currentBalance;
   let sal = salary;
@@ -75,7 +90,7 @@ function simulateRaiseSchedule({
   for (let y = 0; y < years; y++) {
     const monthlyContribution = (y < stopContributingYear ? annualContribution : 0) / 12;
     for (let m = 0; m < 12; m++) {
-      balance = balance * (1 + monthlyRate) + monthlyContribution;
+      balance = Math.min(balance * (1 + monthlyRate) + monthlyContribution, MAX_BALANCE);
     }
     const effectiveRaisePct = raiseSlowdownYears !== null && y >= raiseSlowdownYears ? matureRaisePct : raisePct;
     const raiseAmt = sal * (effectiveRaisePct / 100);
@@ -88,11 +103,12 @@ function simulateRaiseSchedule({
 }
 
 function simulateFlatSchedule({ currentBalance, flatAnnual, realPreReturn, years }) {
+  years = Math.min(Math.max(Math.trunc(years) || 0, 0), MAX_YEARS);
   const monthlyRate = realPreReturn / 100 / 12;
   let balance = currentBalance;
   const monthlyContribution = flatAnnual / 12;
   for (let y = 0; y < years; y++) {
-    for (let m = 0; m < 12; m++) balance = balance * (1 + monthlyRate) + monthlyContribution;
+    for (let m = 0; m < 12; m++) balance = Math.min(balance * (1 + monthlyRate) + monthlyContribution, MAX_BALANCE);
   }
   return balance;
 }
@@ -123,12 +139,14 @@ function simulateDrawdown({ portfolioAtRetirement, retireAge, horizonAge, realPo
   const monthlyRate = realPostReturn / 100 / 12;
   let val = portfolioAtRetirement;
   const rows = [];
-  for (let age = retireAge; age <= horizonAge; age++) {
+  const span = Math.min(Math.max(Math.trunc(horizonAge) - Math.trunc(retireAge), -1), MAX_YEARS);
+  const lastAge = retireAge + span;
+  for (let age = retireAge; age <= lastAge; age++) {
     rows.push({ age, balance: Math.max(val, 0) });
     const smile = useSmile ? spendingSmileFactor(age) : 1;
     const monthlyWithdrawal = (val * (withdrawalRate / 100) * smile) / 12;
     for (let m = 0; m < 12; m++) {
-      val = val * (1 + monthlyRate) - monthlyWithdrawal;
+      val = Math.min(val * (1 + monthlyRate) - monthlyWithdrawal, MAX_BALANCE);
     }
   }
   return { rows, annualIncome: portfolioAtRetirement * (withdrawalRate / 100) };
@@ -454,7 +472,10 @@ function RetirementRunwayV4() {
   const alreadyCoastFI = Number(currentBalance) >= coastFiNumber;
 
   const earliestFireAge = useMemo(() => {
-    for (let age = Number(currentAge) + 1; age <= 80; age++) {
+    // clamped to 0: a very negative typed currentAge would otherwise start this loop far below
+    // zero and iterate hundreds of millions of times before reaching the fixed 80 upper bound.
+    const startAge = Math.max(Number(currentAge) + 1, 0);
+    for (let age = startAge; age <= 80; age++) {
       const s = simulateRaiseSchedule({
         currentBalance: Number(currentBalance), salary: Number(salary), raisePct: Number(raisePct),
         startContribution: currentAnnualContribution, raiseAllocationPct: Number(raiseAllocationPct), realPreReturn, years: age - Number(currentAge),
@@ -466,7 +487,13 @@ function RetirementRunwayV4() {
   }, [currentAge, currentBalance, salary, raisePct, currentAnnualContribution, raiseAllocationPct, realPreReturn, fiNumber, useRaiseSlowdown, raiseSlowdownYears, matureRaisePct, useSalaryCap, salaryCap, stopContributingYear]);
 
   const coastFireAge = useMemo(() => {
-    for (let age = Number(currentAge); age <= Number(retireAge); age++) {
+    // total trip count clamped to MAX_YEARS regardless of how extreme currentAge/retireAge are
+    // individually — an unbounded typed retireAge would otherwise iterate this loop (each step
+    // itself running a full simulation) an arbitrarily large number of times.
+    const startAge = Number(currentAge);
+    const span = Math.min(Math.max(Math.trunc(Number(retireAge)) - Math.trunc(startAge), -1), MAX_YEARS);
+    const endAge = startAge + span;
+    for (let age = startAge; age <= endAge; age++) {
       const s = simulateRaiseSchedule({
         currentBalance: Number(currentBalance), salary: Number(salary), raisePct: Number(raisePct),
         startContribution: currentAnnualContribution, raiseAllocationPct: Number(raiseAllocationPct), realPreReturn, years: age - Number(currentAge),
@@ -530,8 +557,12 @@ function RetirementRunwayV4() {
   const [badYearsCount, setBadYearsCount] = useState(5);
   const [badYearReturn, setBadYearReturn] = useState(-10);
   const sequenceComparison = useMemo(() => {
-    const n = Number(horizonAge) - Number(retireAge) + 1;
-    const bn = Math.min(Number(badYearsCount), n);
+    // clamped to [0, MAX_YEARS]: a negative n would send Array(n) below a negative length and
+    // throw (e.g. retireAge transiently exceeding horizonAge mid-edit); an uncapped upper bound
+    // (e.g. a huge typed horizonAge) would instead build multi-hundred-million-element arrays
+    // below and iterate over them, freezing the tab without ever throwing.
+    const n = Math.min(Math.max(Number(horizonAge) - Number(retireAge) + 1, 0), MAX_YEARS);
+    const bn = Math.min(Math.max(Number(badYearsCount), 0), n);
     const avg = realPostReturn;
     const bad = Number(badYearReturn);
     // solve the "catch-up" rate for the remaining years so the geometric average matches the baseline
@@ -553,6 +584,7 @@ function RetirementRunwayV4() {
         for (let m = 0; m < 12; m++) {
           val = val * (1 + monthlyRate) - monthlyWithdrawal;
           if (val < 0) val = 0;
+          if (val > MAX_BALANCE) val = MAX_BALANCE;
         }
       }
       return Math.max(val, 0);
