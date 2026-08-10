@@ -35,6 +35,9 @@ const MAX_BALANCE = 1e12;
 // enough to look like a crash. 200 years covers every realistic scenario with huge headroom.
 const MAX_YEARS = 200;
 
+// Versioned so a future change to the profile shape can't collide with an old saved blob.
+const AUTOSAVE_KEY = "retirement-runway:autosave-v1";
+
 const RETIRE_CHIPS = [55, 60, 65];
 const TREATMENTS = ["Roth (after-tax)", "Traditional (pre-tax)", "Triple tax-advantaged", "Taxable"];
 const ACCOUNT_TYPES = [
@@ -243,10 +246,13 @@ function RetirementRunwayV4() {
   const [stateTaxRate, setStateTaxRate] = useState(0);
   const [ssTaxablePct, setSsTaxablePct] = useState(85);
 
-  // Persistence: fully self-contained, no account or backend calls of any kind — everything
-  // lives in the URL itself, so it works identically for every viewer, signed in or not.
+  // Persistence: fully self-contained, no account or backend calls of any kind. Two layers:
+  // a debounced localStorage autosave (this browser only, survives refresh/crash, no action
+  // needed) and an explicit shareable link (works across devices/browsers, only updates when
+  // you tap "Copy shareable link" below). A link in the URL always wins over the local save.
   const hydrated = useRef(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const saveTimer = useRef(null);
 
   const applyProfile = (p) => {
     if (p.currentAge !== undefined) setCurrentAge(p.currentAge);
@@ -329,9 +335,14 @@ function RetirementRunwayV4() {
     try {
       const params = new URLSearchParams(window.location.search);
       const d = params.get("d");
-      if (d) applyProfile(decodeProfile(d)); // a shareable link with state baked in — no account needed
+      if (d) {
+        applyProfile(decodeProfile(d)); // a shareable link with state baked in — takes priority
+      } else {
+        const saved = localStorage.getItem(AUTOSAVE_KEY);
+        if (saved) applyProfile(JSON.parse(saved)); // no link — fall back to this browser's last save
+      }
     } catch (e) {
-      // bad or missing link — start fresh
+      // bad link or corrupted local save — start fresh
     }
     hydrated.current = true;
   }, []);
@@ -346,9 +357,23 @@ function RetirementRunwayV4() {
     taxableGainsFraction, stateTaxRate, ssTaxablePct,
   };
 
-  // No auto-updating URL: silently rewriting the address bar on every keystroke turned out to
-  // conflict with how the published page is hosted (it triggered blank-page reloads and lost
-  // edits). Instead, the link only changes when you explicitly hit "Copy shareable link" below.
+  // Autosave to localStorage, debounced so rapid typing doesn't hit disk on every keystroke.
+  // Deliberately not the URL — silently rewriting the address bar on every keystroke turned out
+  // to conflict with how the published page is hosted (it triggered blank-page reloads and lost
+  // edits). The URL only changes when you explicitly hit "Copy shareable link" below.
+  useEffect(() => {
+    if (!hydrated.current) return; // don't clobber a saved profile with defaults before hydration runs
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      try {
+        localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(profileSnapshot));
+      } catch (e) {
+        // storage unavailable/full (e.g. private browsing) — silently skip, same as the
+        // clipboard fallback above
+      }
+    }, 400);
+    return () => clearTimeout(saveTimer.current);
+  }, [profileSnapshot]);
 
   const years = Math.max(Number(retireAge) - Number(currentAge), 0);
 
@@ -732,8 +757,9 @@ function RetirementRunwayV4() {
           {uiMode === "basic" && " Basic mode shows the essentials — switch to Advanced for the full toolkit."}
         </p>
         <p className="rr-mono" style={{ color: MUTED, fontSize: "11px", margin: "10px 0 0 0", maxWidth: "560px", lineHeight: 1.6 }}>
-          No account needed to save your work: fill in your numbers, then tap "Copy shareable link" — it bakes your
-          current inputs into a link you can bookmark or send. Made more edits? Copy a fresh link to capture those too.
+          No account needed: your numbers autosave in this browser as you go, so a refresh won't lose them. To pick up
+          on another device, or send this to someone, tap "Copy shareable link" — it bakes your current inputs into a
+          link you can bookmark or send. Made more edits? Copy a fresh link to capture those too.
         </p>
 
         <div style={{ marginTop: "22px", display: "flex", gap: "40px", flexWrap: "wrap" }}>
