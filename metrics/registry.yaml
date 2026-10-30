@@ -133,16 +133,35 @@ metrics:
     owner: growth-team
     filterable_dimensions: []
     formula_sql: |
+      -- Spend and customer counts are aggregated to channel grain *before*
+      -- joining. Joining monthly spend rows directly to customer rows fans
+      -- spend out once per customer, which silently turns "CAC" into total
+      -- channel spend.
+      WITH spend_by_channel AS (
+        SELECT channel, SUM(spend) AS spend
+        FROM marketing_spend
+        GROUP BY channel
+      ),
+      first_orders AS (
+        SELECT
+          customer_id,
+          channel,
+          ROW_NUMBER() OVER (
+            PARTITION BY customer_id ORDER BY order_date, order_id
+          ) AS order_rank
+        FROM orders
+      ),
+      acquired_by_channel AS (
+        SELECT channel, COUNT(*) AS acquired_customers
+        FROM first_orders
+        WHERE order_rank = 1
+        GROUP BY channel
+      )
       SELECT
         s.channel,
-        ROUND(SUM(s.spend) / NULLIF(COUNT(DISTINCT f.customer_id), 0), 2) AS cac
-      FROM marketing_spend s
-      LEFT JOIN (
-        SELECT customer_id, MIN(order_date) AS first_order_date, channel
-        FROM orders
-        GROUP BY customer_id, channel
-      ) f ON f.channel = s.channel
-      GROUP BY s.channel
+        ROUND(s.spend / NULLIF(a.acquired_customers, 0), 2) AS cac
+      FROM spend_by_channel s
+      LEFT JOIN acquired_by_channel a ON a.channel = s.channel
       ORDER BY s.channel
     verified_by: tests/test_metrics_registry.py::test_cac_by_channel
 

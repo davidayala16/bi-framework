@@ -84,6 +84,17 @@ def test_cac_by_channel(warehouse, registry):
     # paid_social is deliberately the most expensive channel in the
     # synthetic spend model — regression check that the weighting held.
     assert df.set_index("channel").loc["paid_social", "cac"] == df["cac"].max()
+    # Pinned values. These also guard against the spend fan-out bug fixed
+    # in this formula: if spend were joined to customer rows before
+    # aggregating, CAC would equal total channel spend (~$17.8K for
+    # paid_social) instead of spend per acquired customer.
+    assert df.set_index("channel")["cac"].to_dict() == {
+        "direct": 9.79,
+        "email": 42.24,
+        "organic_search": 36.18,
+        "paid_social": 169.66,
+        "referral": 24.85,
+    }
 
 
 def test_ltv_90d(warehouse, registry):

@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import duckdb
@@ -5,6 +6,12 @@ import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+# Make `metrics.resolver` importable from tests no matter how pytest is
+# invoked (`pytest tests/` in CI doesn't put the repo root on sys.path).
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 WAREHOUSE_PATH = REPO_ROOT / "data" / "warehouse.duckdb"
 REGISTRY_PATH = REPO_ROOT / "metrics" / "registry.yaml"
 

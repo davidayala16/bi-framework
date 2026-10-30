@@ -1,57 +1,75 @@
-# Looker Adapter (contract only — not implemented)
+# LookML Layer (working code, no Looker instance)
 
-This folder is intentionally documentation-only. It shows how
-`metrics/registry.yaml` would map onto Looker's semantic layer, without
-building a full LookML project for a demo that has no real Looker instance
-behind it.
+A LookML project that exposes every registry metric in Looker, built on
+the dbt marts in `platforms/dbt`. There's no Looker instance behind this
+demo, so the LookML isn't executed here. Instead, CI checks the structural
+guarantees that keep it from becoming a second, ungoverned set of metric
+definitions (see [Tests](#tests)).
 
-## The mapping
+## Files
 
-Looker's unit of metric definition is a LookML `measure` inside a `view`.
-Each entry in the registry maps like this:
-
-| Registry field | LookML equivalent |
+| File | Contents |
 |---|---|
-| `id` | measure name |
-| `name` | `label:` |
-| `description` | `description:` |
-| `formula_sql` / `formula_sql_template` | `sql:` (DuckDB-specific syntax, e.g. `INTERVAL 90 DAY`, would need translating to the warehouse's SQL dialect) |
-| `filterable_dimensions` | LookML dimensions the measure can be sliced by in an Explore |
-| `owner` | a LookML `tag:` or governance metadata, surfaced via a content validator |
+| `bi_framework.model.lkml` | Connection, a `dbt_build` datagroup that refreshes caches when dbt adds new orders, and four explores |
+| `views/fct_order_items.view.lkml` | Order-item fact: Net Revenue, Orders, Average Order Value, sliceable by channel, region, category, and order date |
+| `views/dim_customers.view.lkml` | Customer-grain cohort metrics: 90-Day LTV, 90-Day Churn Rate, and the acquisition funnel (customer count by acquisition channel × purchase outcome) |
+| `views/repeat_purchase.view.lkml` | Repeat Purchase Rate, filter-aware via templated filters (see below) |
+| `views/channel_acquisition_cost.view.lkml` | Marketing spend, acquired customers, and CAC by channel |
 
-Example, hand-translated from `net_revenue` in the registry:
+## Design choices worth calling out
 
-```lookml
-view: fact_orders {
-  sql_table_name: fact_orders ;;
+**Looker reads dbt, never raw tables.** Every view's `sql_table_name` and
+derived-table SQL references the `analytics` schema dbt builds. Looker
+inherits dbt's tests and the registry parity checks instead of re-deriving
+joins of its own, and a test enforces it.
 
-  dimension: channel { type: string; sql: ${TABLE}.channel ;; }
-  dimension: region  { type: string; sql: ${TABLE}.region ;; }
-  dimension: category { type: string; sql: ${TABLE}.category ;; }
+**Every governed measure is tagged to the registry.** Each measure that
+implements a registry metric carries `tags: ["registry:<metric_id>"]`, and
+its label and description come from the registry entry.
 
-  measure: net_revenue {
-    type: sum
-    sql: ${TABLE}.revenue ;;
-    label: "Net Revenue"
-    description: "Total revenue recognized across all order line items."
-    value_format_name: usd
-  }
-}
-```
+**Repeat purchase rate uses templated filters, not a plain measure.**
+"Repeat buyer" has to be decided *after* filtering. A customer with two
+orders overall but only one on `paid_social` is a one-time buyer when the
+explore is filtered to `paid_social`. A measure on `fct_order_items` can't
+express that, so `repeat_purchase` pushes the channel/region/category
+filters into a derived table before counting orders per customer. That
+matches the registry's filterable formula: filtered to `paid_social`, both
+return 40.9% (versus 78.7% unfiltered).
 
-## What would make this real
+**CAC keeps its inputs additive.** `channel_acquisition_cost` exposes spend
+and acquired customers as separate `sum` measures and computes CAC as their
+ratio. That's correct per channel and still correct when channels are
+combined, and it aggregates both inputs to channel grain before joining,
+the same fix applied to the registry's CAC formula.
 
-1. A generation script that reads `metrics/registry.yaml` and emits LookML
-   `measure` blocks — the same pattern as the CI verification step, just
-   targeting LookML output instead of a pytest assertion.
-2. A `content_validator` policy tying each measure back to its
-   `verified_by` test, so a registry change that breaks the golden test
-   also fails Looker CI (via the Looker API) before it ships.
-3. Row-level `access_grant`s if any metric needed to be restricted by
-   region/team — not needed for this synthetic dataset.
+**AOV is computed at order grain.** It's Net Revenue divided by distinct
+orders, so multi-item orders aren't double counted.
 
-The point of keeping this to a contract: adding a *second* full platform
-implementation wouldn't teach anything new about the architecture — the
-registry-as-source-of-truth pattern is already proven by Shiny + the Slack
-bot. This doc exists so the pattern's reach is legible without the extra
-build cost.
+## Tests
+
+`tests/test_lookml_coverage.py` runs in CI:
+
+1. Every registry metric has exactly one LookML measure tagged
+   `registry:<metric_id>`, and no tag points at a metric that doesn't exist.
+2. LookML reads only from the `analytics` schema, never from raw tables.
+3. Each tagged measure's label matches the registry's metric name (uses
+   the `lkml` parser: `pip install -r platforms/looker/requirements.txt`).
+
+All five files parse cleanly with `lkml`. The measures' SQL was also
+checked by hand-translating each measure into the query Looker would
+generate and running it against the dbt tables. Net revenue, AOV, and
+repeat purchase rate (each unfiltered and filtered by channel), LTV, churn,
+the acquisition funnel, and CAC all match `resolve_metric()`.
+
+## Pointing it at a real Looker instance
+
+Looker doesn't support DuckDB as a connection dialect. To use this for
+real, build the dbt project into a Looker-supported warehouse (Redshift,
+Snowflake, BigQuery, Postgres), create a connection named
+`bi_framework_warehouse`, and add these files to a LookML project. The
+LookML SQL is standard ANSI; only the dbt models use DuckDB-specific
+syntax (`interval 90 day`), and dbt handles that per adapter.
+
+Natural next steps for a production setup: run the Looker content
+validator and LookML validator in CI via the Looker API, and add
+`access_grant`s if any metric needed row-level restrictions.

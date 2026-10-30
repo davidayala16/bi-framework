@@ -1,0 +1,14 @@
+# Local-only profile: dbt builds into the same synthetic DuckDB warehouse
+# the registry and resolver read, under a separate `analytics` schema so
+# raw tables (main schema) and modeled tables never collide.
+#
+# Run from the repo root:
+#   dbt build --project-dir platforms/dbt --profiles-dir platforms/dbt
+bi_framework:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('BI_FRAMEWORK_WAREHOUSE', 'data/warehouse.duckdb') }}"
+      schema: analytics
+      threads: 4

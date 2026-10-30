@@ -22,13 +22,17 @@ flowchart TD
 
     RES --> SHINY["platforms/shiny<br/>(working dashboard)"]
     RES --> SLACK["platforms/slack-bot<br/>(working local mock)"]
-    RES -.contract only.-> LOOKER["platforms/looker"]
     RES -.contract only.-> PBI["platforms/powerbi"]
-    RES -.contract only.-> DBT["platforms/dbt"]
 
-    TESTS["tests/test_metrics_registry.py<br/>golden-query regression tests"]
+    DBT["platforms/dbt<br/>(staging → marts → metric models)"]
+    LOOKER["platforms/looker<br/>(LookML on dbt marts)"]
+    DATA --> DBT --> LOOKER
+
+    TESTS["tests/<br/>golden-query, dbt parity, LookML coverage"]
     CI[".github/workflows/verify-metrics.yml"]
     REG --> TESTS --> CI
+    DBT -.checked against registry.-> TESTS
+    LOOKER -.checked against registry.-> TESTS
 
     ANALYST["Analyst + AI agent session<br/>(isolated via git worktree)"]
     ANALYST -- edits --> REG
@@ -93,12 +97,16 @@ agent, several, or none at all.
 ## What's real vs. what's a contract
 
 - **Real, tested, running:** the registry, the resolver, the synthetic
-  data generator, the Shiny app, the Slack bot mock, the pytest suite, the
-  CI workflow.
-- **Documented but not built:** Looker, Power BI, and dbt adapters (see
-  their READMEs under `platforms/`). Building all of them would prove the
-  same point three more times at three times the cost — the docs exist so
-  the pattern's reach is legible without that cost.
+  data generator, the Shiny app, the Slack bot mock, the dbt project, the
+  pytest suite, the CI workflow.
+- **Real code, structurally tested:** the LookML layer. There's no Looker
+  instance behind the demo, so CI verifies coverage, labels, and that
+  LookML reads only dbt tables rather than running Looker queries (see
+  `platforms/looker/README.md`).
+- **Documented but not built:** the Power BI adapter. dbt and Looker were
+  built because they test something new: whether the registry can govern
+  a transformation layer and a semantic layer that don't import the
+  resolver at all. A third BI tool would prove the same point again.
 
 ## How this scales past a demo
 
