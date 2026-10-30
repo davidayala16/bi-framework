@@ -1,8 +1,9 @@
 name: verify-metrics
 
 # The gate referenced throughout metrics/registry.yaml's `verified_by`
-# fields. Any change touching a metric formula, or the synthetic data
-# generator, has to pass the golden-query tests before it can merge.
+# fields. Any change touching a metric formula, the synthetic data
+# generator, or the dbt / LookML layers has to pass the golden-query,
+# dbt parity, and LookML coverage tests before it can merge.
 
 on:
   pull_request:
@@ -11,6 +12,8 @@ on:
       - "data/generate_synthetic_data.py"
       - "tests/**"
       - "requirements.txt"
+      - "platforms/dbt/**"
+      - "platforms/looker/**"
   push:
     branches: [main]
 
@@ -25,10 +28,18 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt \
+            -r platforms/dbt/requirements.txt \
+            -r platforms/looker/requirements.txt
 
       - name: Build synthetic warehouse
         run: python data/generate_synthetic_data.py
 
-      - name: Run metrics registry verification
+      - name: Build and test dbt models
+        run: dbt build --project-dir platforms/dbt --profiles-dir platforms/dbt
+
+      - name: Run metrics registry, dbt parity, and LookML coverage tests
+        env:
+          REQUIRE_DBT: "1"
         run: pytest tests/ -v

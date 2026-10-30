@@ -1,0 +1,63 @@
+version: 2
+
+# One model per metric in metrics/registry.yaml. The registry stays the
+# definition of record: each model below is an implementation of a registry
+# entry, linked by `meta.registry_id`, and tests/test_dbt_parity.py fails CI
+# if any model's output drifts from what metrics.resolver returns for the
+# same metric — or if a registry metric has no dbt model at all.
+
+models:
+  - name: metric_net_revenue
+    description: Implements registry metric `net_revenue`.
+    meta: {registry_id: net_revenue, owner: analytics-team}
+    columns:
+      - name: net_revenue
+        tests: [not_null]
+
+  - name: metric_aov
+    description: Implements registry metric `aov` (order grain, not line-item grain).
+    meta: {registry_id: aov, owner: analytics-team}
+    columns:
+      - name: aov
+        tests: [not_null]
+
+  - name: metric_repeat_purchase_rate
+    description: Implements registry metric `repeat_purchase_rate`.
+    meta: {registry_id: repeat_purchase_rate, owner: analytics-team}
+    columns:
+      - name: repeat_purchase_rate_pct
+        tests: [not_null]
+
+  - name: metric_cac_by_channel
+    description: >
+      Implements registry metric `cac_by_channel`. Spend and acquired-customer
+      counts are aggregated to channel grain before joining, so spend is never
+      fanned out across customer rows.
+    meta: {registry_id: cac_by_channel, owner: growth-team}
+    columns:
+      - name: channel
+        tests: [unique, not_null]
+      - name: cac
+        tests: [not_null]
+
+  - name: metric_ltv_90d
+    description: Implements registry metric `ltv_90d`.
+    meta: {registry_id: ltv_90d, owner: analytics-team}
+    columns:
+      - name: ltv_90d
+        tests: [not_null]
+
+  - name: metric_acquisition_funnel
+    description: Implements registry metric `acquisition_funnel`.
+    meta: {registry_id: acquisition_funnel, owner: growth-team}
+    tests:
+      - unique_combination:
+          arguments:
+            columns: [channel, outcome]
+
+  - name: metric_churn_rate_90d
+    description: Implements registry metric `churn_rate_90d`.
+    meta: {registry_id: churn_rate_90d, owner: analytics-team}
+    columns:
+      - name: churn_rate_90d_pct
+        tests: [not_null]

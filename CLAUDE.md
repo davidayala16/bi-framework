@@ -34,6 +34,11 @@ corresponding test in `tests/test_metrics_registry.py` referenced by
    exist yet or the generator changed.
 2. Run `pytest tests/ -v`. All tests must pass — this is what
    `.github/workflows/verify-metrics.yml` enforces on every PR.
+   If you changed a metric, update its dbt model
+   (`platforms/dbt/models/metrics/`) and its tagged LookML measure too, run
+   `dbt build --project-dir platforms/dbt --profiles-dir platforms/dbt`,
+   and rerun pytest: the dbt parity and LookML coverage tests will fail
+   until all three layers agree.
 3. If you added or changed a metric, confirm `tests/test_metrics_registry.py`
    has a test pinning its actual output value, not just asserting it runs.
 
@@ -50,18 +55,21 @@ way even for what looks like a harmless internal demo value.
 
 ## Adding a new platform
 
-Real, working platforms (currently Shiny and the Slack bot) live under
+Presentation platforms (currently Shiny and the Slack bot) live under
 `platforms/<name>/` and import `metrics.resolver` — they contain no SQL of
-their own. Documented-only adapters (Looker, Power BI, dbt) are a
-`README.md` describing the mapping, not working code — that's deliberate,
-see the note at the bottom of `docs/ARCHITECTURE.md`. Don't build a full
-implementation for a fourth platform without checking with whoever's
-driving the repo first; the pattern is already proven twice.
+their own. dbt (`platforms/dbt/`) and LookML (`platforms/looker/`) are the
+exception: they're SQL layers that can't call the resolver, so they're
+governed by tests instead (`tests/test_dbt_parity.py`,
+`tests/test_lookml_coverage.py`). LookML must read only from dbt's
+`analytics` schema, and every governed measure carries a
+`registry:<metric_id>` tag. Power BI is documented only. Don't build
+another platform without checking with whoever's driving the repo first.
 
 ## Scope
 
 This repo is a portfolio/reference-architecture demo. Keep additions
 consistent with that: synthetic data only, no real company data or
 metrics, no external service dependencies beyond what's already declared
-in `requirements.txt`, and no infrastructure a recruiter cloning this
-repo can't run locally in a few minutes.
+in `requirements.txt` (plus the optional `platforms/dbt` and
+`platforms/looker` requirements files), and no infrastructure a recruiter
+cloning this repo can't run locally in a few minutes.

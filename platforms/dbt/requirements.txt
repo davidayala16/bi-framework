@@ -1,0 +1,6 @@
+# Kept separate from the root requirements.txt so the core demo (registry,
+# resolver, Shiny, Slack bot) stays dependency-light. Install both to run
+# the dbt layer:
+#   pip install -r requirements.txt -r platforms/dbt/requirements.txt
+dbt-core>=1.9,<2
+dbt-duckdb>=1.9,<2

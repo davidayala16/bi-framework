@@ -1,0 +1,68 @@
+version: 2
+
+models:
+  - name: stg_customers
+    description: One row per customer. Light typing over the raw table, no logic.
+    columns:
+      - name: customer_id
+        tests: [unique, not_null]
+      - name: acquisition_channel
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [paid_social, organic_search, email, referral, direct]
+      - name: region
+        tests:
+          - accepted_values:
+              arguments:
+                values: [West, Midwest, South, Northeast]
+
+  - name: stg_orders
+    description: One row per order.
+    columns:
+      - name: order_id
+        tests: [unique, not_null]
+      - name: customer_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+      - name: channel
+        tests:
+          - accepted_values:
+              arguments:
+                values: [paid_social, organic_search, email, referral, direct]
+
+  - name: stg_order_items
+    description: One row per order line item, with line revenue precomputed.
+    columns:
+      - name: order_item_id
+        tests: [unique, not_null]
+      - name: order_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
+      - name: product_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+
+  - name: stg_products
+    description: One row per product.
+    columns:
+      - name: product_id
+        tests: [unique, not_null]
+
+  - name: stg_marketing_spend
+    description: One row per month per channel of synthetic marketing spend.
+    tests:
+      - unique_combination:
+          arguments:
+            columns: [spend_month, channel]

@@ -1,0 +1,47 @@
+version: 2
+
+models:
+  - name: fct_order_items
+    description: >
+      Order-item grain fact table — the dbt implementation of `base_fact_sql`
+      in metrics/registry.yaml. Filterable dimensions (channel, region,
+      category) live here so registry metrics and LookML measures filter the
+      same rows.
+    columns:
+      - name: order_item_id
+        tests: [unique, not_null]
+      - name: order_id
+        tests: [not_null]
+      - name: revenue
+        description: quantity * unit_price for the line item.
+        tests: [not_null]
+      - name: channel
+        tests: [not_null]
+      - name: region
+        tests: [not_null]
+      - name: category
+        tests: [not_null]
+
+  - name: fct_orders
+    description: Order grain, with order revenue and the order's position in the customer's sequence.
+    columns:
+      - name: order_id
+        tests: [unique, not_null]
+      - name: customer_order_number
+        description: 1 = the customer's first (acquisition) order, ordered by date then order_id.
+        tests: [not_null]
+
+  - name: dim_customers
+    description: >
+      Customer grain, including customers who never ordered. Shared source of
+      "first order", "last order", and 90-day revenue for every cohort metric.
+    columns:
+      - name: customer_id
+        tests: [unique, not_null]
+      - name: purchase_outcome
+        tests:
+          - accepted_values:
+              arguments:
+                values: [Never Purchased, One-Time Buyer, Repeat Buyer]
+      - name: first_order_channel
+        description: Channel of the customer's first order; the attribution basis for CAC.

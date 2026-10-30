@@ -43,6 +43,21 @@ and on every push to `main`. A metric change that breaks its own test
 can't merge. This is the actual enforcement mechanism — sections 1 and 2
 are what make the gate meaningful; this is what makes it non-optional.
 
+## 4. Cross-layer parity (dbt and LookML)
+
+dbt and LookML don't import `resolve_metric()`, so they can't be governed
+by construction the way Shiny and the Slack bot are. They're governed by
+tests instead:
+
+- `tests/test_dbt_parity.py` checks that every registry metric has a dbt
+  model, that dbt's `fct_order_items` is row-for-row identical to
+  `base_fact_sql`, and that every `metric_*` table equals the resolver's
+  output. A plausible-looking dbt change, such as AOV at line-item grain,
+  passes dbt's own tests and fails here.
+- `tests/test_lookml_coverage.py` checks that every registry metric has
+  exactly one tagged LookML measure with a matching label, and that
+  LookML reads only from dbt-built tables.
+
 ## What this doesn't cover (yet)
 
 - **Semantic correctness beyond the pinned values.** The tests confirm a
@@ -50,10 +65,13 @@ are what make the gate meaningful; this is what makes it non-optional.
   *right*. That judgment call — is 90-day churn the correct churn window
   for this business — stays a human (analyst/manager) decision, encoded
   by writing the formula and its test in the first place.
-- **Cross-platform consistency at runtime.** Shiny and the Slack bot both
-  import the same `resolve_metric()`, so they can't drift by construction
-  — but the Looker/Power BI/dbt adapters are documentation-only (see
-  `platforms/*/README.md`), so nothing here actually verifies a real
-  Looker measure matches the registry. Doing that for real would mean the
-  generation-script approach sketched in those READMEs, with its own CI
-  check.
+- **Pinned values that only check shape.** A test that asserts a
+  metric's *shape* (positive values, the right channel is largest) can
+  pass while the formula is wrong. `cac_by_channel` once fanned spend out
+  across customer rows and returned total channel spend as "CAC"; its test
+  only checked that paid_social was the highest, so it passed. Pin actual
+  values.
+- **LookML at runtime.** The LookML coverage tests are structural. Nothing
+  here executes a Looker query, since there's no Looker instance; doing
+  that for real means running the Looker content validator in CI via the
+  Looker API.

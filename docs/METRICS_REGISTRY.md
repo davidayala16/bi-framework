@@ -1,9 +1,11 @@
 # Metric Governance
 
 `metrics/registry.yaml` is the single place a metric formula is allowed to
-be defined in this repo. Every platform (Shiny, the Slack bot, and the
-documented Looker/Power BI/dbt adapters) reads from it through
-`metrics/resolver.py` rather than writing its own SQL. This document is
+be defined in this repo. Shiny and the Slack bot read from it through
+`metrics/resolver.py` rather than writing their own SQL. The dbt and
+LookML layers implement the same metrics in SQL, and parity and coverage
+tests fail CI if they ever disagree with the registry (see
+`docs/VERIFICATION.md`). This document is
 the "why," not the schema — the schema is documented inline at the top of
 the registry file itself.
 

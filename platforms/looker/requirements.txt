@@ -1,0 +1,4 @@
+# Only needed for the LookML label check in tests/test_lookml_coverage.py
+# (the other coverage checks run without it). Parses LookML; no Looker
+# instance or credentials required.
+lkml>=1.3,<2

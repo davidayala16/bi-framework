@@ -8,3 +8,10 @@ platforms/slack-bot/output/
 .DS_Store
 .Rhistory
 .Rproj.user/
+
+# dbt
+platforms/dbt/target/
+platforms/dbt/logs/
+platforms/dbt/dbt_packages/
+platforms/dbt/.user.yml
+logs/

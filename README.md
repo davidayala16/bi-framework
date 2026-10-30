@@ -17,7 +17,9 @@ flowchart LR
     REG["metrics/registry.yaml<br/>metric formulas + owners"] --> RES["metrics/resolver.py<br/>the only path to a query"]
     RES --> SHINY["Shiny dashboard"]
     RES --> SLACK["Slack bot"]
-    RES -.contract only.-> OTHER["Looker / Power BI / dbt"]
+    DBT["dbt models<br/>staging → marts → metrics"] --> LOOKER["LookML views"]
+    REG -.parity tests.-> DBT
+    REG -.coverage tests.-> LOOKER
     REG --> TESTS["golden-query tests"] --> CI["CI gate on every PR"]
 ```
 
@@ -39,10 +41,14 @@ Give an analytics team a repo where:
 - **A verification layer catches drift before it ships** — parameterized
   queries, golden-query regression tests, and a CI gate. See
   [`docs/VERIFICATION.md`](docs/VERIFICATION.md).
-- **The same registry powers multiple platforms.** Shiny and a Slack bot
-  are fully working; Looker, Power BI, and dbt are documented adapter
-  contracts (see `platforms/*/README.md`) showing how the pattern extends
-  without building four dashboard platforms for one demo.
+- **The same registry governs every layer.** Shiny and a Slack bot call
+  the resolver directly. A working **dbt** project builds every metric as
+  a tested warehouse table, and parity tests fail CI if any dbt model
+  disagrees with the registry. A **LookML** layer on top of the dbt marts
+  exposes every metric in Looker, with coverage tests that keep each
+  measure tied to its registry entry. Power BI remains a documented
+  adapter contract. See [`platforms/dbt`](platforms/dbt/README.md) and
+  [`platforms/looker`](platforms/looker/README.md).
 
 Full write-up of the design decisions: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 Lessons from actually running this pattern: [`docs/FIELD_NOTES.md`](docs/FIELD_NOTES.md).
@@ -77,6 +83,11 @@ pip install -r requirements.txt
 python data/generate_synthetic_data.py   # builds the synthetic warehouse
 
 pytest tests/ -v                          # golden-query verification suite
+
+# optional: the dbt + LookML layers
+pip install -r platforms/dbt/requirements.txt -r platforms/looker/requirements.txt
+dbt build --project-dir platforms/dbt --profiles-dir platforms/dbt
+pytest tests/ -v                          # now also runs dbt parity + LookML coverage
 
 shiny run platforms/shiny/app.py          # http://127.0.0.1:8000
 python platforms/slack-bot/bot.py         # interactive terminal wizard
@@ -123,8 +134,10 @@ data/                       synthetic DTC e-commerce data generator
 platforms/palette.py        shared, dataviz-validated chart palette (both working platforms)
 platforms/shiny/            working dashboard
 platforms/slack-bot/        working local-mock Slack bot
-platforms/{looker,powerbi,dbt}/   documented adapter contracts, not built
-tests/                      golden-query regression tests
+platforms/dbt/              working dbt project: staging → marts → one model per metric
+platforms/looker/           LookML model + views on the dbt marts, tagged to the registry
+platforms/powerbi/          documented adapter contract, not built
+tests/                      golden-query, dbt parity, and LookML coverage tests
 .github/workflows/          CI gate enforcing the tests above on every PR
 docs/                       architecture, governance, verification, and worktree docs
 CLAUDE.md                   the contract Claude reads before touching this repo

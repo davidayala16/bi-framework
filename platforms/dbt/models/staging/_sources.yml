@@ -1,0 +1,15 @@
+version: 2
+
+sources:
+  - name: raw
+    description: >
+      Synthetic DTC e-commerce tables written by data/generate_synthetic_data.py
+      into the warehouse's default schema. Fabricated with a fixed seed; no
+      real company data.
+    schema: main
+    tables:
+      - name: customers
+      - name: orders
+      - name: order_items
+      - name: products
+      - name: marketing_spend
