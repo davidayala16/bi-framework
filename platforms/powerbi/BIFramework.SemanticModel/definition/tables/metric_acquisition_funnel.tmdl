@@ -1,0 +1,53 @@
+/// Precomputed by dbt (platforms/dbt/models/metrics/metric_acquisition_funnel.sql) as the registry metric `acquisition_funnel`. The registry marks this metric as not filterable, so the table is deliberately left without relationships: no slicer can reach it, and Power BI shows the same number the resolver returns. Reading the dbt table instead of re-deriving the cohort logic in DAX keeps the definition in one tested place (tests/test_dbt_parity.py pins this table to the registry).
+table metric_acquisition_funnel
+	lineageTag: 4c04e3d1-e2ea-57fa-8e73-73239a1e04ac
+
+	/// For each acquisition channel, how many customers ended up Never Purchased / One-Time Buyer / Repeat Buyer. A cohort metric — uses the customer's original acquisition_channel (fixed at signup), not the per-order channel used elsewhere in the registry, and isn't filterable by dimension for the same reason cac_by_channel isn't.
+	measure 'Acquisition Funnel by Channel' =
+			-- Read from the dbt metric table (acquisition channel x outcome).
+			-- Counts are additive, so a plain sum is correct at any grouping of
+			-- this table's own channel and outcome columns.
+			SUM(metric_acquisition_funnel[customer_count])
+		formatString: #,0
+		displayFolder: Acquisition
+		lineageTag: ecfe43c8-6b12-5aa0-947f-2e54c70bb81f
+
+		annotation registry_id = acquisition_funnel
+
+		annotation registry_owner = growth-team
+
+	/// The customer's acquisition channel (fixed at signup), not the per-order channel.
+	column channel
+		dataType: string
+		lineageTag: e90ca27e-abee-586b-a793-f2729e1bed67
+		summarizeBy: none
+		sourceColumn: channel
+
+	/// Never Purchased / One-Time Buyer / Repeat Buyer.
+	column outcome
+		dataType: string
+		lineageTag: c3730eff-209e-5809-8ce6-cf71d5b4f62a
+		summarizeBy: none
+		sourceColumn: outcome
+
+	column customer_count
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 5b02bc44-c9f1-5a28-9d08-a10aa06ae76c
+		summarizeBy: none
+		sourceColumn: customer_count
+
+	partition metric_acquisition_funnel = m
+		mode: import
+		source =
+				let
+				    Source = Odbc.Query(
+				        "Driver=DuckDB Driver;Database=" & WarehousePath & ";access_mode=read_only",
+				        "select channel, outcome, customer_count from analytics.metric_acquisition_funnel"
+				    ),
+				    Typed = Table.TransformColumnTypes(Source, {{"channel", type text}, {"outcome", type text}, {"customer_count", Int64.Type}})
+				in
+				    Typed
+
+	annotation PBI_ResultType = Table

@@ -1,0 +1,99 @@
+/// Customer grain, built by dbt (platforms/dbt/models/marts/dim_customers.sql), including customers who never ordered. Holds the customer-level facts dbt builds the cohort metrics from.
+table dim_customers
+	lineageTag: e7330e6c-3b2a-5c67-93af-1e11e21a880a
+
+	column customer_id
+		dataType: int64
+		isKey
+		formatString: 0
+		lineageTag: 3a02c7dc-fe01-5707-9658-d046da576871
+		summarizeBy: none
+		sourceColumn: customer_id
+
+	column signup_date
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: 18168a6d-f42a-537a-af6d-7e35dd89247b
+		summarizeBy: none
+		sourceColumn: signup_date
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	/// Channel the customer was acquired through, fixed at signup.
+	column acquisition_channel
+		dataType: string
+		lineageTag: 689d1e20-4e5b-5821-8cd7-519908599bbd
+		summarizeBy: none
+		sourceColumn: acquisition_channel
+
+	column region
+		dataType: string
+		lineageTag: cc3b7f28-f9ee-5985-b888-1e82b09bcfa7
+		summarizeBy: none
+		sourceColumn: region
+
+	column first_order_date
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: b22d0e1b-d907-5c91-aab0-9ee2ed31522a
+		summarizeBy: none
+		sourceColumn: first_order_date
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column last_order_date
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: 5d283e1a-ccbd-5e39-84c6-51cf05701214
+		summarizeBy: none
+		sourceColumn: last_order_date
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	/// Channel of the customer's first order; the attribution basis for CAC.
+	column first_order_channel
+		dataType: string
+		lineageTag: 512b805f-373f-5597-8fd7-7924eb818954
+		summarizeBy: none
+		sourceColumn: first_order_channel
+
+	column order_count
+		dataType: int64
+		formatString: 0
+		lineageTag: 89d95fad-be63-59be-b6ba-343c7b4bc3f5
+		summarizeBy: none
+		sourceColumn: order_count
+
+	column revenue_first_90d
+		dataType: double
+		lineageTag: a7249762-5eaf-5e63-b0eb-92aff6392b7e
+		summarizeBy: none
+		sourceColumn: revenue_first_90d
+
+	/// Never Purchased / One-Time Buyer / Repeat Buyer.
+	column purchase_outcome
+		dataType: string
+		lineageTag: 3fbec516-16ea-5c91-87d4-634d44b58c5f
+		summarizeBy: none
+		sourceColumn: purchase_outcome
+
+	/// Most recent order is 90+ days before the dataset's last order date. Blank for customers who never ordered.
+	column is_churned_90d
+		dataType: boolean
+		lineageTag: 1e4f8664-7980-5d78-a201-1a98fc698aec
+		summarizeBy: none
+		sourceColumn: is_churned_90d
+
+	partition dim_customers = m
+		mode: import
+		source =
+				let
+				    Source = Odbc.Query(
+				        "Driver=DuckDB Driver;Database=" & WarehousePath & ";access_mode=read_only",
+				        "select customer_id, signup_date, acquisition_channel, region, first_order_date, last_order_date, first_order_channel, order_count, revenue_first_90d, purchase_outcome, is_churned_90d from analytics.dim_customers"
+				    ),
+				    Typed = Table.TransformColumnTypes(Source, {{"customer_id", Int64.Type}, {"signup_date", type date}, {"acquisition_channel", type text}, {"region", type text}, {"first_order_date", type date}, {"last_order_date", type date}, {"first_order_channel", type text}, {"order_count", Int64.Type}, {"revenue_first_90d", type number}, {"purchase_outcome", type text}, {"is_churned_90d", type logical}})
+				in
+				    Typed
+
+	annotation PBI_ResultType = Table

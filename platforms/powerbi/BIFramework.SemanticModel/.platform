@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "SemanticModel",
+    "displayName": "BIFramework"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "79543e51-305f-50e6-8c23-2a4128515f13"
+  }
+}

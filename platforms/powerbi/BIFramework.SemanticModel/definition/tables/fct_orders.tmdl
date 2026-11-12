@@ -1,0 +1,75 @@
+/// Order grain, built by dbt (platforms/dbt/models/marts/fct_orders.sql): one row per order with its total and its position in the customer's order sequence.
+table fct_orders
+	lineageTag: 96eafa38-4193-5a69-9b62-ca86812c2c19
+
+	column order_id
+		dataType: int64
+		isKey
+		formatString: 0
+		lineageTag: cae32063-ed92-5831-a395-4a33bda7d5e3
+		summarizeBy: none
+		sourceColumn: order_id
+
+	column customer_id
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: b6590a64-62dd-5e2a-8140-ac55c7f71ffc
+		summarizeBy: none
+		sourceColumn: customer_id
+
+	column order_date
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: 2d23a08d-0955-50af-926c-07311773c865
+		summarizeBy: none
+		sourceColumn: order_date
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column channel
+		dataType: string
+		lineageTag: c9f5f4da-6c2e-5d15-9239-41672a7f1c09
+		summarizeBy: none
+		sourceColumn: channel
+
+	column region
+		dataType: string
+		lineageTag: 31f1a37b-60a3-5b94-a983-d566445b977b
+		summarizeBy: none
+		sourceColumn: region
+
+	column order_revenue
+		dataType: double
+		lineageTag: 723a1de4-6183-5212-8106-b7a1db70f124
+		summarizeBy: none
+		sourceColumn: order_revenue
+
+	column line_item_count
+		dataType: int64
+		formatString: 0
+		lineageTag: ebaa6ad9-2059-5314-8b86-497975256052
+		summarizeBy: none
+		sourceColumn: line_item_count
+
+	/// 1 = the customer's first (acquisition) order, ordered by date then order_id.
+	column customer_order_number
+		dataType: int64
+		formatString: 0
+		lineageTag: a7fcd142-9dfd-5f0c-b44d-e80b35ecec41
+		summarizeBy: none
+		sourceColumn: customer_order_number
+
+	partition fct_orders = m
+		mode: import
+		source =
+				let
+				    Source = Odbc.Query(
+				        "Driver=DuckDB Driver;Database=" & WarehousePath & ";access_mode=read_only",
+				        "select order_id, customer_id, order_date, channel, region, order_revenue, line_item_count, customer_order_number from analytics.fct_orders"
+				    ),
+				    Typed = Table.TransformColumnTypes(Source, {{"order_id", Int64.Type}, {"customer_id", Int64.Type}, {"order_date", type date}, {"channel", type text}, {"region", type text}, {"order_revenue", type number}, {"line_item_count", Int64.Type}, {"customer_order_number", Int64.Type}})
+				in
+				    Typed
+
+	annotation PBI_ResultType = Table

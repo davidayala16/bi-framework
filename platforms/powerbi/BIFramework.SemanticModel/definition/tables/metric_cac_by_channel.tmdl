@@ -1,0 +1,45 @@
+/// Precomputed by dbt (platforms/dbt/models/metrics/metric_cac_by_channel.sql) as the registry metric `cac_by_channel`. The registry marks this metric as not filterable, so the table is deliberately left without relationships: no slicer can reach it, and Power BI shows the same number the resolver returns. Reading the dbt table instead of re-deriving the cohort logic in DAX keeps the definition in one tested place (tests/test_dbt_parity.py pins this table to the registry).
+table metric_cac_by_channel
+	lineageTag: e4789a33-6f60-5ed9-942f-c993d2d297b4
+
+	/// Total marketing spend on a channel divided by the number of distinct customers who placed a first order on that channel, over the full dataset window. A cohort metric — not filterable by dimension, since spend and first-order attribution are already channel-grained.
+	measure 'Customer Acquisition Cost by Channel' =
+			-- Read from the dbt metric table, not re-derived: spend and first-order
+			-- attribution are already aggregated to channel grain there. CAC is a
+			-- ratio, so it has no meaningful total: blank unless one channel is in
+			-- context.
+			SELECTEDVALUE(metric_cac_by_channel[cac])
+		formatString: \$#,0.00
+		displayFolder: Acquisition
+		lineageTag: 1439e721-bfcc-5fc9-a02b-5b2e8efac413
+
+		annotation registry_id = cac_by_channel
+
+		annotation registry_owner = growth-team
+
+	column channel
+		dataType: string
+		lineageTag: 73d91356-4f79-5f9f-bea9-84be34e44c02
+		summarizeBy: none
+		sourceColumn: channel
+
+	column cac
+		dataType: double
+		isHidden
+		lineageTag: a22e0d3f-108b-533b-9b2c-bb732d2be0c9
+		summarizeBy: none
+		sourceColumn: cac
+
+	partition metric_cac_by_channel = m
+		mode: import
+		source =
+				let
+				    Source = Odbc.Query(
+				        "Driver=DuckDB Driver;Database=" & WarehousePath & ";access_mode=read_only",
+				        "select channel, cac from analytics.metric_cac_by_channel"
+				    ),
+				    Typed = Table.TransformColumnTypes(Source, {{"channel", type text}, {"cac", type number}})
+				in
+				    Typed
+
+	annotation PBI_ResultType = Table

@@ -1,0 +1,6 @@
+# Per-user Power BI Desktop state: local settings and the data cache.
+**/.pbi/localSettings.json
+**/.pbi/cache.abf
+
+# CSV fallback written by export_csv.py
+export/
