@@ -94,11 +94,49 @@ The practical implication: this repo's core bet isn't "use Claude." It's
 is a bet that pays off identically whether the team standardizes on one
 agent, several, or none at all.
 
+## Warehouse-agnostic by construction
+
+The same argument applies one layer down. The governance model shouldn't
+depend on which warehouse a team runs, so the dbt project is written to
+build unchanged on DuckDB, Snowflake, Databricks, and Redshift:
+
+- **Models contain no dialect-specific SQL.** The few places engines
+  disagree (date arithmetic, 64-bit float type names, boolean
+  expressions) go through dbt's cross-database macros or small
+  adapter-dispatched macros in `platforms/dbt/macros/`.
+- **The warehouse is a `--target`.** `platforms/dbt/profiles.yml` has one
+  output per warehouse. Every credential is an `env_var()`; nothing
+  secret is in the repo.
+- **The registry stays the single definition.** Its formula SQL is DuckDB
+  dialect and is only ever run on DuckDB. On a cloud warehouse, dbt's
+  output is compared against the resolver's DuckDB results on the same
+  seeded synthetic data, so there's still exactly one place a metric is
+  defined, and the cloud build is checked against it rather than against
+  a translated copy.
+
+What CI does and doesn't verify, stated plainly:
+
+- **CI verifies DuckDB only**, with no credentials: the full `dbt build`,
+  registry parity, and the portability plumbing (no literal credentials in
+  `profiles.yml`, no DuckDB-only SQL in the models, and the load script's
+  export-and-load path, exercised against a second DuckDB file).
+- **CI does not run Snowflake, Databricks, or Redshift.** Those targets
+  are verified by hand: load the synthetic data, `dbt build --target
+  <name>`, then `DBT_PARITY_TARGET=<name> pytest tests/test_dbt_parity.py`.
+  Until someone does that against a live account, the claim for that
+  warehouse is "compiles against the real adapter and parses in its
+  dialect," not "runs."
+
+See `platforms/dbt/README.md#run-on-a-cloud-warehouse`.
+
 ## What's real vs. what's a contract
 
 - **Real, tested, running:** the registry, the resolver, the synthetic
   data generator, the Shiny app, the Slack bot mock, the dbt project, the
   pytest suite, the CI workflow.
+- **Real code, run by hand:** the Snowflake, Databricks, and Redshift dbt
+  targets, the warehouse load script, and the cross-warehouse parity
+  tests. They need your own credentials, so CI skips them (see above).
 - **Real code, structurally tested:** the LookML layer. There's no Looker
   instance behind the demo, so CI verifies coverage, labels, and that
   LookML reads only dbt tables rather than running Looker queries (see

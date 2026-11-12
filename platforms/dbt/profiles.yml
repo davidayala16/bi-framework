@@ -1,14 +1,63 @@
-# Local-only profile: dbt builds into the same synthetic DuckDB warehouse
-# the registry and resolver read, under a separate `analytics` schema so
-# raw tables (main schema) and modeled tables never collide.
+# One dbt project, four warehouses.
+#
+# `dev` (DuckDB) is the default and the only target CI runs: it needs no
+# services and no credentials. `snowflake`, `databricks`, and `redshift`
+# are opt-in targets you run by hand with your own account. Every
+# credential is read from an environment variable (see .env.example at the
+# repo root), so nothing secret ever lives in this file. dbt only renders
+# the target you select, so the cloud env vars don't need to exist for
+# DuckDB runs.
+#
+# All targets build into an `analytics` schema, which is what LookML and
+# the parity tests reference. Raw tables live in `main` on DuckDB and in
+# `raw` on the cloud targets (override with BI_FRAMEWORK_RAW_SCHEMA).
 #
 # Run from the repo root:
 #   dbt build --project-dir platforms/dbt --profiles-dir platforms/dbt
+#   dbt build --project-dir platforms/dbt --profiles-dir platforms/dbt --target snowflake
 bi_framework:
   target: dev
   outputs:
     dev:
       type: duckdb
       path: "{{ env_var('BI_FRAMEWORK_WAREHOUSE', 'data/warehouse.duckdb') }}"
+      schema: analytics
+      threads: 4
+
+    # pip install -r platforms/dbt/requirements-snowflake.txt
+    # SNOWFLAKE_PASSWORD takes a password or a programmatic access token.
+    # For key-pair auth, set SNOWFLAKE_PRIVATE_KEY_PATH instead and leave
+    # SNOWFLAKE_PASSWORD unset.
+    snowflake:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD', '') or none }}"
+      private_key_path: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PATH', '') or none }}"
+      private_key_passphrase: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PASSPHRASE', '') or none }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE') }}"
+      schema: analytics
+      threads: 4
+
+    # pip install -r platforms/dbt/requirements-databricks.txt
+    databricks:
+      type: databricks
+      host: "{{ env_var('DATABRICKS_HOST') }}"
+      http_path: "{{ env_var('DATABRICKS_HTTP_PATH') }}"
+      token: "{{ env_var('DATABRICKS_TOKEN') }}"
+      catalog: "{{ env_var('DATABRICKS_CATALOG', 'workspace') }}"
+      schema: analytics
+      threads: 4
+
+    # pip install -r platforms/dbt/requirements-redshift.txt
+    redshift:
+      type: redshift
+      host: "{{ env_var('REDSHIFT_HOST') }}"
+      port: "{{ env_var('REDSHIFT_PORT', '5439') | int }}"
+      user: "{{ env_var('REDSHIFT_USER') }}"
+      password: "{{ env_var('REDSHIFT_PASSWORD') }}"
+      dbname: "{{ env_var('REDSHIFT_DATABASE') }}"
       schema: analytics
       threads: 4

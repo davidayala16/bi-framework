@@ -47,7 +47,14 @@ Give an analytics team a repo where:
   disagrees with the registry. A **LookML** layer on top of the dbt marts
   exposes every metric in Looker, with coverage tests that keep each
   measure tied to its registry entry. Power BI remains a documented
-  adapter contract. See [`platforms/dbt`](platforms/dbt/README.md) and
+  adapter contract.
+- **Warehouse-agnostic.** The dbt project runs unchanged on DuckDB,
+  Snowflake, Databricks, and Redshift: dialect differences live in a few
+  cross-database macros, connections in `profiles.yml` targets that read
+  every credential from environment variables. DuckDB is the default and
+  the only target CI runs, so CI needs no credentials; the cloud targets
+  are opt-in, with a load script and parity tests you run against your own
+  account. [What CI does and doesn't verify](platforms/dbt/README.md#what-has-and-hasnt-been-verified). See [`platforms/dbt`](platforms/dbt/README.md) and
   [`platforms/looker`](platforms/looker/README.md).
 
 Full write-up of the design decisions: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -88,6 +95,12 @@ pytest tests/ -v                          # golden-query verification suite
 pip install -r platforms/dbt/requirements.txt -r platforms/looker/requirements.txt
 dbt build --project-dir platforms/dbt --profiles-dir platforms/dbt
 pytest tests/ -v                          # now also runs dbt parity + LookML coverage
+
+# optional: the same dbt project on Snowflake / Databricks / Redshift
+# (your own credentials; see platforms/dbt/README.md#run-on-a-cloud-warehouse)
+python scripts/load_synthetic_to_warehouse.py --target snowflake
+dbt build --project-dir platforms/dbt --profiles-dir platforms/dbt --target snowflake
+DBT_PARITY_TARGET=snowflake pytest tests/test_dbt_parity.py -v
 
 shiny run platforms/shiny/app.py          # http://127.0.0.1:8000
 python platforms/slack-bot/bot.py         # interactive terminal wizard
@@ -135,6 +148,7 @@ platforms/palette.py        shared, dataviz-validated chart palette (both workin
 platforms/shiny/            working dashboard
 platforms/slack-bot/        working local-mock Slack bot
 platforms/dbt/              working dbt project: staging → marts → one model per metric
+scripts/                    load the synthetic data into a cloud warehouse (optional)
 platforms/looker/           LookML model + views on the dbt marts, tagged to the registry
 platforms/powerbi/          documented adapter contract, not built
 tests/                      golden-query, dbt parity, and LookML coverage tests

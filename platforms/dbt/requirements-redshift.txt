@@ -1,0 +1,5 @@
+# Optional: only needed to run the dbt project and the load script against
+# Redshift. Brings in redshift_connector, which
+# scripts/load_synthetic_to_warehouse.py and the cloud parity tests use.
+-r requirements.txt
+dbt-redshift>=1.9,<2

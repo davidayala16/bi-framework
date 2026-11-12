@@ -15,3 +15,8 @@ platforms/dbt/logs/
 platforms/dbt/dbt_packages/
 platforms/dbt/.user.yml
 logs/
+
+# local credentials for the optional cloud warehouse targets
+.env
+.env.*
+!.env.example

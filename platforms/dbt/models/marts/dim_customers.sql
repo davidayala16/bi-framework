@@ -19,7 +19,7 @@ revenue_90d as (
         sum(o.order_revenue) as revenue_first_90d
     from {{ ref('fct_orders') }} o
     join order_stats s on s.customer_id = o.customer_id
-    where o.order_date <= s.first_order_date + interval 90 day
+    where o.order_date <= {{ days_from('s.first_order_date', 90) }}
     group by o.customer_id
 ),
 
@@ -44,8 +44,9 @@ select
     end as purchase_outcome,
     -- null for customers with no orders: churn only applies to buyers
     case
-        when s.last_order_date is null then null
-        else s.last_order_date <= b.as_of_date - interval 90 day
+        when s.last_order_date is null then cast(null as {{ dbt.type_boolean() }})
+        when s.last_order_date <= {{ days_from('b.as_of_date', -90) }} then true
+        else false
     end as is_churned_90d
 from {{ ref('stg_customers') }} c
 left join order_stats s on s.customer_id = c.customer_id

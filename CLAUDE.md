@@ -53,6 +53,24 @@ without first reading why in `docs/METRICS_REGISTRY.md`. Filter values are
 always parameter-bound, never string-interpolated into SQL — keep it that
 way even for what looks like a harmless internal demo value.
 
+## Warehouse portability
+
+The dbt project must build unchanged on DuckDB, Snowflake, Databricks, and
+Redshift. DuckDB is the default and the only target CI runs; CI stays
+credential-free. When editing `platforms/dbt/`:
+
+- No DuckDB-only SQL in models, tests, or macros (`+ interval N day`,
+  `::` casts, `QUALIFY`, `date_diff`). Use dbt's cross-database macros
+  (`dbt.dateadd`, `dbt.datediff`, `dbt.date_trunc`, `dbt.type_*`) or an
+  adapter-dispatched macro in `platforms/dbt/macros/`. Use `type_double()`
+  for money, never `dbt.type_float()` (32-bit on DuckDB and Databricks).
+- Credentials only ever come from `env_var()` in `profiles.yml` and from
+  the same variables in `scripts/_warehouses.py`. Never commit a `.env`.
+- Don't run the registry's formula SQL on a cloud warehouse: it's DuckDB
+  dialect. Cloud parity compares dbt's cloud output to the resolver's
+  DuckDB results (`test_cloud_*` in `tests/test_dbt_parity.py`).
+- Don't claim a cloud target works unless it was actually run against one.
+
 ## Adding a new platform
 
 Presentation platforms (currently Shiny and the Slack bot) live under
@@ -71,5 +89,6 @@ This repo is a portfolio/reference-architecture demo. Keep additions
 consistent with that: synthetic data only, no real company data or
 metrics, no external service dependencies beyond what's already declared
 in `requirements.txt` (plus the optional `platforms/dbt` and
-`platforms/looker` requirements files), and no infrastructure a recruiter
+`platforms/looker` requirements files, including the per-warehouse
+`platforms/dbt/requirements-<warehouse>.txt`), and no infrastructure a recruiter
 cloning this repo can't run locally in a few minutes.

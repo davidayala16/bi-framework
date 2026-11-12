@@ -1,0 +1,5 @@
+# Optional: only needed to run the dbt project and the load script against
+# Snowflake. Brings in snowflake-connector-python, which
+# scripts/load_synthetic_to_warehouse.py and the cloud parity tests use.
+-r requirements.txt
+dbt-snowflake>=1.9,<2

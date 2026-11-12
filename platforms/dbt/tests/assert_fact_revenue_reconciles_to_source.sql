@@ -4,10 +4,11 @@
 with modeled as (
     select round(sum(revenue), 2) as revenue from {{ ref('fct_order_items') }}
 ),
-source as (
-    select round(sum(quantity * unit_price), 2) as revenue
+raw_source as (
+    select round(sum(quantity * cast(unit_price as {{ type_double() }})), 2) as revenue
     from {{ source('raw', 'order_items') }}
 )
-select modeled.revenue as modeled_revenue, source.revenue as source_revenue
-from modeled, source
-where modeled.revenue != source.revenue
+select modeled.revenue as modeled_revenue, raw_source.revenue as source_revenue
+from modeled
+cross join raw_source
+where modeled.revenue <> raw_source.revenue

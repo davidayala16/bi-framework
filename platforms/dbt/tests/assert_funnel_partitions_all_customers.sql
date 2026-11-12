@@ -7,5 +7,6 @@ customers as (
     select count(*) as customer_total from {{ source('raw', 'customers') }}
 )
 select funnel_total, customer_total
-from funnel, customers
-where funnel_total != customer_total
+from funnel
+cross join customers
+where funnel_total <> customer_total

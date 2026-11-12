@@ -5,6 +5,11 @@ name: verify-metrics
 # generator, or the dbt / LookML layers has to pass the golden-query,
 # dbt parity, and LookML coverage tests before it can merge.
 
+# DuckDB only, on purpose: this workflow needs no credentials. The
+# Snowflake / Databricks / Redshift targets in platforms/dbt/profiles.yml
+# are run by hand (see platforms/dbt/README.md); their parity tests skip
+# here because DBT_PARITY_TARGET is unset.
+
 on:
   pull_request:
     paths:
@@ -14,6 +19,7 @@ on:
       - "requirements.txt"
       - "platforms/dbt/**"
       - "platforms/looker/**"
+      - "scripts/**"
   push:
     branches: [main]
 

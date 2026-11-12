@@ -1,0 +1,5 @@
+# Optional: only needed to run the dbt project and the load script against
+# Databricks. Brings in databricks-sql-connector, which
+# scripts/load_synthetic_to_warehouse.py and the cloud parity tests use.
+-r requirements.txt
+dbt-databricks>=1.9,<2
