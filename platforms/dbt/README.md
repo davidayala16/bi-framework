@@ -22,7 +22,7 @@ tests fail CI if any dbt model ever disagrees with it.
 ```mermaid
 flowchart LR
     RAW["raw tables<br/>(main schema)"] --> STG["staging<br/>stg_* views"]
-    STG --> MARTS["marts<br/>fct_order_items · fct_orders · dim_customers"]
+    STG --> MARTS["marts<br/>fct_order_items · fct_orders · dim_customers · channel_acquisition"]
     MARTS --> MET["metrics<br/>metric_* tables"]
     MARTS --> LOOKML["LookML views<br/>(platforms/looker)"]
     MET -.parity tests.-> REG["metrics/registry.yaml"]
@@ -33,6 +33,7 @@ flowchart LR
 | `staging/` | `stg_customers`, `stg_orders`, `stg_order_items`, `stg_products`, `stg_marketing_spend` | One view per raw table: typing and renames only, no business logic |
 | `marts/` | `fct_order_items` | Order-item grain fact; the dbt implementation of `base_fact_sql`, carrying the filterable dimensions (channel, region, category) |
 | | `fct_orders` | Order grain, with order revenue and the order's position in the customer's sequence |
+| | `channel_acquisition` | Channel grain: marketing spend and acquired customers, the two additive inputs to CAC |
 | | `dim_customers` | Customer grain, including never-purchased customers; the single definition of first order, last order, 90-day revenue, purchase outcome, and churn flag |
 | `metrics/` | `metric_<registry_id>` (7 models) | One table per registry metric, output columns identical to `resolve_metric()` |
 
@@ -50,7 +51,7 @@ dbt build --project-dir platforms/dbt --profiles-dir platforms/dbt
 pytest tests/ -v                            # now includes dbt parity tests
 ```
 
-`dbt build` runs all 15 models and 41 data tests in about two seconds.
+`dbt build` runs all 16 models and 44 data tests in about two seconds.
 
 ## How it stays governed
 
@@ -185,7 +186,7 @@ without connecting to anything.
 dbt build --project-dir platforms/dbt --profiles-dir platforms/dbt --target snowflake
 ```
 
-Same models, same 41 data tests, in the warehouse's `analytics` schema.
+Same models, same 44 data tests, in the warehouse's `analytics` schema.
 
 ### 6. Run the parity tests against it
 
@@ -219,6 +220,16 @@ in place (`tests/test_warehouse_portability.py`: no secrets in
 `profiles.yml`, no DuckDB-only SQL in the models, and the load script's
 export-and-load path reproduces the raw tables against a second DuckDB
 file). A cloud target is verified when you run steps 4–6 against it.
+
+## Semantic layers on top
+
+`meta.semantic` in `models/marts/_marts.yml` and
+`models/metrics/_metrics.yml` restates each metric as one aggregate over a
+mart. `scripts/export_semantic_layer.py` combines that with the registry
+to generate a Snowflake semantic view and Databricks Unity Catalog metric
+views, and `tests/test_semantic_layer_export.py` runs each expression on
+DuckDB against the registry. See
+[`platforms/semantic_layer`](../semantic_layer/README.md).
 
 ## What's next
 

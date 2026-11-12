@@ -54,7 +54,11 @@ Give an analytics team a repo where:
   every credential from environment variables. DuckDB is the default and
   the only target CI runs, so CI needs no credentials; the cloud targets
   are opt-in, with a load script and parity tests you run against your own
-  account. [What CI does and doesn't verify](platforms/dbt/README.md#what-has-and-hasnt-been-verified). See [`platforms/dbt`](platforms/dbt/README.md) and
+  account. [What CI does and doesn't verify](platforms/dbt/README.md#what-has-and-hasnt-been-verified).
+- **Warehouse-native semantic layers, generated.** A script turns the
+  registry into a Snowflake semantic view and Databricks Unity Catalog
+  metric views, and CI runs every exported expression on DuckDB against
+  the registry. See [`platforms/semantic_layer`](platforms/semantic_layer/README.md). See [`platforms/dbt`](platforms/dbt/README.md) and
   [`platforms/looker`](platforms/looker/README.md).
 
 Full write-up of the design decisions: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -148,7 +152,8 @@ platforms/palette.py        shared, dataviz-validated chart palette (both workin
 platforms/shiny/            working dashboard
 platforms/slack-bot/        working local-mock Slack bot
 platforms/dbt/              working dbt project: staging → marts → one model per metric
-scripts/                    load the synthetic data into a cloud warehouse (optional)
+platforms/semantic_layer/   generated Snowflake semantic view + Databricks metric views
+scripts/                    cloud warehouse loader, semantic layer export
 platforms/looker/           LookML model + views on the dbt marts, tagged to the registry
 platforms/powerbi/          documented adapter contract, not built
 tests/                      golden-query, dbt parity, and LookML coverage tests

@@ -137,6 +137,11 @@ See `platforms/dbt/README.md#run-on-a-cloud-warehouse`.
 - **Real code, run by hand:** the Snowflake, Databricks, and Redshift dbt
   targets, the warehouse load script, and the cross-warehouse parity
   tests. They need your own credentials, so CI skips them (see above).
+- **Generated, value-tested on DuckDB, not executed in the cloud:** the
+  Snowflake semantic view and Databricks metric views in
+  `platforms/semantic_layer/`. CI proves each exported expression equals
+  the registry on DuckDB and that the files are current; it can't prove
+  either warehouse accepts the DDL (see that folder's README).
 - **Real code, structurally tested:** the LookML layer. There's no Looker
   instance behind the demo, so CI verifies coverage, labels, and that
   LookML reads only dbt tables rather than running Looker queries (see

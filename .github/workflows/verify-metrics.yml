@@ -19,6 +19,7 @@ on:
       - "requirements.txt"
       - "platforms/dbt/**"
       - "platforms/looker/**"
+      - "platforms/semantic_layer/**"
       - "scripts/**"
   push:
     branches: [main]

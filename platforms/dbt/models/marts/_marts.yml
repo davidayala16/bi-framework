@@ -1,5 +1,11 @@
 version: 2
 
+# `meta.semantic` describes each mart as a logical table for
+# scripts/export_semantic_layer.py (Snowflake semantic view, Databricks
+# metric views): its alias, primary key, and the columns exposed as
+# dimensions. Metric expressions live next to their dbt models in
+# models/metrics/_metrics.yml.
+
 models:
   - name: fct_order_items
     description: >
@@ -7,6 +13,13 @@ models:
       in metrics/registry.yaml. Filterable dimensions (channel, region,
       category) live here so registry metrics and LookML measures filter the
       same rows.
+    meta:
+      semantic:
+        alias: order_items
+        primary_key: [order_item_id]
+        dimensions: [order_date, channel, region, category]
+        relationships:
+          - {name: order_items_to_customers, column: customer_id, to: dim_customers}
     columns:
       - name: order_item_id
         tests: [unique, not_null]
@@ -35,6 +48,11 @@ models:
     description: >
       Customer grain, including customers who never ordered. Shared source of
       "first order", "last order", and 90-day revenue for every cohort metric.
+    meta:
+      semantic:
+        alias: customers
+        primary_key: [customer_id]
+        dimensions: [acquisition_channel, region, purchase_outcome, first_order_channel]
     columns:
       - name: customer_id
         tests: [unique, not_null]
@@ -45,3 +63,21 @@ models:
                 values: [Never Purchased, One-Time Buyer, Repeat Buyer]
       - name: first_order_channel
         description: Channel of the customer's first order; the attribution basis for CAC.
+
+  - name: channel_acquisition
+    description: >
+      Channel grain: total marketing spend and customers whose first order
+      came through the channel. The two additive inputs to CAC, aggregated
+      separately before joining so spend is never fanned out.
+    meta:
+      semantic:
+        alias: channel_acquisition
+        primary_key: [channel]
+        dimensions: [channel]
+    columns:
+      - name: channel
+        tests: [unique, not_null]
+      - name: spend
+        tests: [not_null]
+      - name: acquired_customers
+        description: Null if no customer's first order came through the channel.
