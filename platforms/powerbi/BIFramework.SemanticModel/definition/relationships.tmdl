@@ -1,0 +1,8 @@
+relationship 61777601-74c8-5c21-8115-e299f3c58b0b
+	fromColumn: fct_order_items.order_id
+	toColumn: fct_orders.order_id
+
+relationship e0ec1523-f687-5fee-b05d-97cd5d7a44de
+	fromColumn: fct_orders.customer_id
+	toColumn: dim_customers.customer_id
+

@@ -57,6 +57,11 @@ tests instead:
 - `tests/test_lookml_coverage.py` checks that every registry metric has
   exactly one tagged LookML measure with a matching label, and that
   LookML reads only from dbt-built tables.
+- `tests/test_powerbi_coverage.py` does the same for the Power BI semantic
+  model (TMDL): one annotated measure per registry metric, with matching
+  name, description, and format; non-filterable metrics read dbt's
+  precomputed tables; and every table query runs against the warehouse and
+  returns the columns the model declares.
 
 ## What this doesn't cover (yet)
 
@@ -75,3 +80,7 @@ tests instead:
   here executes a Looker query, since there's no Looker instance; doing
   that for real means running the Looker content validator in CI via the
   Looker API.
+- **DAX at runtime.** Likewise for Power BI: the coverage tests parse the
+  model but don't evaluate DAX, since there's no Power BI engine in CI.
+  The cohort metrics read value-checked dbt tables, so the exposure is the
+  three filterable DAX measures; see `platforms/powerbi/README.md`.

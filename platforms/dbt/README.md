@@ -25,6 +25,8 @@ flowchart LR
     STG --> MARTS["marts<br/>fct_order_items · fct_orders · dim_customers · channel_acquisition"]
     MARTS --> MET["metrics<br/>metric_* tables"]
     MARTS --> LOOKML["LookML views<br/>(platforms/looker)"]
+    MARTS --> PBI["Power BI model<br/>(platforms/powerbi)"]
+    MET --> PBI
     MET -.parity tests.-> REG["metrics/registry.yaml"]
 ```
 
