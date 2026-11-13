@@ -35,10 +35,11 @@ corresponding test in `tests/test_metrics_registry.py` referenced by
 2. Run `pytest tests/ -v`. All tests must pass — this is what
    `.github/workflows/verify-metrics.yml` enforces on every PR.
    If you changed a metric, update its dbt model
-   (`platforms/dbt/models/metrics/`) and its tagged LookML measure too, run
+   (`platforms/dbt/models/metrics/`), its tagged LookML measure, and its
+   annotated Power BI measure too, run
    `dbt build --project-dir platforms/dbt --profiles-dir platforms/dbt`,
-   and rerun pytest: the dbt parity and LookML coverage tests will fail
-   until all three layers agree.
+   and rerun pytest: the dbt parity and LookML / Power BI coverage tests
+   will fail until all the layers agree.
 3. If you added or changed a metric, confirm `tests/test_metrics_registry.py`
    has a test pinning its actual output value, not just asserting it runs.
 
@@ -57,13 +58,19 @@ way even for what looks like a harmless internal demo value.
 
 Presentation platforms (currently Shiny and the Slack bot) live under
 `platforms/<name>/` and import `metrics.resolver` — they contain no SQL of
-their own. dbt (`platforms/dbt/`) and LookML (`platforms/looker/`) are the
-exception: they're SQL layers that can't call the resolver, so they're
-governed by tests instead (`tests/test_dbt_parity.py`,
-`tests/test_lookml_coverage.py`). LookML must read only from dbt's
-`analytics` schema, and every governed measure carries a
-`registry:<metric_id>` tag. Power BI is documented only. Don't build
-another platform without checking with whoever's driving the repo first.
+their own. dbt (`platforms/dbt/`), LookML (`platforms/looker/`), and
+Power BI (`platforms/powerbi/`, a PBIP project with a TMDL semantic model)
+are the exception: they can't call the resolver, so they're governed by
+tests instead (`tests/test_dbt_parity.py`, `tests/test_lookml_coverage.py`,
+`tests/test_powerbi_coverage.py`). LookML and Power BI must read only from
+dbt's `analytics` schema. Every governed LookML measure carries a
+`registry:<metric_id>` tag; every governed Power BI measure carries
+`annotation registry_id = <metric_id>`, with its name and description
+copied from the registry. In Power BI, metrics with
+`filterable_dimensions: []` read their precomputed `metric_<id>` dbt table
+rather than re-deriving the logic in DAX. TMDL is tab-indented; put
+explanations in `///` descriptions or DAX comments. Don't build another platform without
+checking with whoever's driving the repo first.
 
 ## Scope
 

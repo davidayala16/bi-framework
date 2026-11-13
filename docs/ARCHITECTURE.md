@@ -22,17 +22,19 @@ flowchart TD
 
     RES --> SHINY["platforms/shiny<br/>(working dashboard)"]
     RES --> SLACK["platforms/slack-bot<br/>(working local mock)"]
-    RES -.contract only.-> PBI["platforms/powerbi"]
 
     DBT["platforms/dbt<br/>(staging → marts → metric models)"]
     LOOKER["platforms/looker<br/>(LookML on dbt marts)"]
+    PBI["platforms/powerbi<br/>(TMDL semantic model on dbt marts)"]
     DATA --> DBT --> LOOKER
+    DBT --> PBI
 
-    TESTS["tests/<br/>golden-query, dbt parity, LookML coverage"]
+    TESTS["tests/<br/>golden-query, dbt parity, LookML + Power BI coverage"]
     CI[".github/workflows/verify-metrics.yml"]
     REG --> TESTS --> CI
     DBT -.checked against registry.-> TESTS
     LOOKER -.checked against registry.-> TESTS
+    PBI -.checked against registry.-> TESTS
 
     ANALYST["Analyst + AI agent session<br/>(isolated via git worktree)"]
     ANALYST -- edits --> REG
@@ -99,14 +101,21 @@ agent, several, or none at all.
 - **Real, tested, running:** the registry, the resolver, the synthetic
   data generator, the Shiny app, the Slack bot mock, the dbt project, the
   pytest suite, the CI workflow.
-- **Real code, structurally tested:** the LookML layer. There's no Looker
-  instance behind the demo, so CI verifies coverage, labels, and that
-  LookML reads only dbt tables rather than running Looker queries (see
-  `platforms/looker/README.md`).
-- **Documented but not built:** the Power BI adapter. dbt and Looker were
-  built because they test something new: whether the registry can govern
-  a transformation layer and a semantic layer that don't import the
-  resolver at all. A third BI tool would prove the same point again.
+- **Real code, structurally tested:** the LookML layer and the Power BI
+  project. Neither has a runtime in CI (there's no Looker instance, and
+  Power BI Desktop is Windows-only), so CI verifies coverage, names,
+  descriptions, and that each reads only dbt tables, rather than running
+  Looker queries or evaluating DAX. The Power BI model is stored as TMDL
+  text so those checks are possible at all, and its table queries are run
+  against the warehouse (see `platforms/looker/README.md` and
+  `platforms/powerbi/README.md`).
+
+dbt, Looker, and Power BI each test something the resolver-based platforms
+don't: whether the registry can govern a transformation layer and two
+semantic layers that can't import the resolver. Power BI adds one more
+case: a layer whose native file format is binary. Choosing the text
+project format is what turns it from something to review by screenshot
+into something CI can gate.
 
 ## How this scales past a demo
 

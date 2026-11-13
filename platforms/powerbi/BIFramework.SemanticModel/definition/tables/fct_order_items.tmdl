@@ -1,0 +1,141 @@
+/// Order-item grain fact, built by dbt (platforms/dbt/models/marts/fct_order_items.sql). The dbt implementation of the registry's base_fact_sql: every filterable metric aggregates over this table, so channel, region, and category slicers belong on these columns.
+table fct_order_items
+	lineageTag: 3e6a7a50-87b3-5345-9ad6-6623978ad19c
+
+	/// Total revenue recognized across all order line items in the period. Gross of returns — there is no returns table in the synthetic dataset, so treat this as a simplified top-line figure.
+	measure 'Net Revenue' = SUM(fct_order_items[revenue])
+		formatString: \$#,0.00
+		displayFolder: Revenue
+		lineageTag: db8b067f-e61b-512d-b247-1a5ff3f34a81
+
+		annotation registry_id = net_revenue
+
+		annotation registry_owner = analytics-team
+
+	/// Net revenue divided by the number of distinct orders. Computed at the order grain, not the line-item grain, so multi-item orders aren't double counted.
+	measure 'Average Order Value' =
+			-- Order grain, not line-item grain: revenue over distinct orders, so
+			-- multi-item orders aren't double counted.
+			DIVIDE([Net Revenue], DISTINCTCOUNT(fct_order_items[order_id]))
+		formatString: \$#,0.00
+		displayFolder: Revenue
+		lineageTag: 476c4a0b-8d2b-5315-8b2d-2d14e6233ed1
+
+		annotation registry_id = aov
+
+		annotation registry_owner = analytics-team
+
+	/// Share of customers with 2+ distinct orders (matching the filter), out of all customers with at least one order matching the filter.
+	measure 'Repeat Purchase Rate' =
+			-- "Repeat buyer" is decided after filtering: orders are counted per
+			-- customer inside the current filter context, so a customer with two
+			-- orders overall but one on paid_social is a one-time buyer when
+			-- sliced to paid_social. Same semantics as the registry formula.
+			VAR OrdersPerCustomer =
+			    ADDCOLUMNS(
+			        VALUES(fct_order_items[customer_id]),
+			        "@orders", CALCULATE(DISTINCTCOUNT(fct_order_items[order_id]))
+			    )
+			VAR RepeatCustomers = COUNTROWS(FILTER(OrdersPerCustomer, [@orders] >= 2))
+			RETURN
+			    100 * DIVIDE(RepeatCustomers + 0, COUNTROWS(OrdersPerCustomer))
+		formatString: 0.0\%
+		displayFolder: Retention
+		lineageTag: c8a531f7-3024-5aec-b7c0-be08c9bc1beb
+
+		annotation registry_id = repeat_purchase_rate
+
+		annotation registry_owner = analytics-team
+
+	column order_item_id
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 02562ff6-0368-5ef3-95a3-de4a1924dd8f
+		summarizeBy: none
+		sourceColumn: order_item_id
+
+	column order_id
+		dataType: int64
+		formatString: 0
+		lineageTag: 8c46f682-f7f9-5004-9ad1-e6f4cd17c0f8
+		summarizeBy: none
+		sourceColumn: order_id
+
+	column order_date
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: a165a083-f011-53f6-ad37-ab1492ee6dbc
+		summarizeBy: none
+		sourceColumn: order_date
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column customer_id
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 67278412-db59-53bd-ae95-2d8780d8482b
+		summarizeBy: none
+		sourceColumn: customer_id
+
+	/// Channel the order came through (per-order, not the customer's acquisition channel).
+	column channel
+		dataType: string
+		lineageTag: 89743027-59a3-58a0-9308-b9d29a8b6ec5
+		summarizeBy: none
+		sourceColumn: channel
+
+	column region
+		dataType: string
+		lineageTag: 0a9bac71-9649-5fb7-adff-f5acc41e4ba4
+		summarizeBy: none
+		sourceColumn: region
+
+	column category
+		dataType: string
+		lineageTag: 739a1ac0-7182-5e16-9fdf-83ded88e68d8
+		summarizeBy: none
+		sourceColumn: category
+
+	column product_id
+		dataType: int64
+		formatString: 0
+		lineageTag: 8c5a9c50-8986-5cab-bfcd-12d93394302f
+		summarizeBy: none
+		sourceColumn: product_id
+
+	column quantity
+		dataType: int64
+		formatString: 0
+		lineageTag: 17816333-70da-5ead-a37d-457e489bbfc4
+		summarizeBy: none
+		sourceColumn: quantity
+
+	column unit_price
+		dataType: double
+		lineageTag: 23020fe4-672e-53d8-8402-cada5e579b82
+		summarizeBy: none
+		sourceColumn: unit_price
+
+	/// quantity * unit_price for the line item. Hidden: use the Net Revenue measure.
+	column revenue
+		dataType: double
+		isHidden
+		lineageTag: 9eaf008d-66ee-56f1-bbec-d48d3efdc5f7
+		summarizeBy: none
+		sourceColumn: revenue
+
+	partition fct_order_items = m
+		mode: import
+		source =
+				let
+				    Source = Odbc.Query(
+				        "Driver=DuckDB Driver;Database=" & WarehousePath & ";access_mode=read_only",
+				        "select order_item_id, order_id, order_date, customer_id, channel, region, category, product_id, quantity, unit_price, revenue from analytics.fct_order_items"
+				    ),
+				    Typed = Table.TransformColumnTypes(Source, {{"order_item_id", Int64.Type}, {"order_id", Int64.Type}, {"order_date", type date}, {"customer_id", Int64.Type}, {"channel", type text}, {"region", type text}, {"category", type text}, {"product_id", Int64.Type}, {"quantity", Int64.Type}, {"unit_price", type number}, {"revenue", type number}})
+				in
+				    Typed
+
+	annotation PBI_ResultType = Table

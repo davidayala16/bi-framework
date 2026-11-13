@@ -1,0 +1,6 @@
+/// Absolute path to the DuckDB warehouse this repo builds (data/warehouse.duckdb). Change it to match your clone: Transform data > Edit parameters.
+expression WarehousePath = "C:\bi-framework\data\warehouse.duckdb" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+	lineageTag: 2e63ec24-4b0a-55a2-92e7-2cf57dd79080
+
+	annotation PBI_ResultType = Text
+

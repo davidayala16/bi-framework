@@ -18,8 +18,10 @@ flowchart LR
     RES --> SHINY["Shiny dashboard"]
     RES --> SLACK["Slack bot"]
     DBT["dbt models<br/>staging → marts → metrics"] --> LOOKER["LookML views"]
+    DBT --> PBI["Power BI model<br/>(TMDL)"]
     REG -.parity tests.-> DBT
     REG -.coverage tests.-> LOOKER
+    REG -.coverage tests.-> PBI
     REG --> TESTS["golden-query tests"] --> CI["CI gate on every PR"]
 ```
 
@@ -46,9 +48,11 @@ Give an analytics team a repo where:
   a tested warehouse table, and parity tests fail CI if any dbt model
   disagrees with the registry. A **LookML** layer on top of the dbt marts
   exposes every metric in Looker, with coverage tests that keep each
-  measure tied to its registry entry. Power BI remains a documented
-  adapter contract. See [`platforms/dbt`](platforms/dbt/README.md) and
-  [`platforms/looker`](platforms/looker/README.md).
+  measure tied to its registry entry. A **Power BI** project does the same
+  with DAX measures, stored as TMDL text so they can be diffed in a PR and
+  checked in CI. See [`platforms/dbt`](platforms/dbt/README.md),
+  [`platforms/looker`](platforms/looker/README.md), and
+  [`platforms/powerbi`](platforms/powerbi/README.md).
 
 Full write-up of the design decisions: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 Lessons from actually running this pattern: [`docs/FIELD_NOTES.md`](docs/FIELD_NOTES.md).
@@ -84,10 +88,10 @@ python data/generate_synthetic_data.py   # builds the synthetic warehouse
 
 pytest tests/ -v                          # golden-query verification suite
 
-# optional: the dbt + LookML layers
+# optional: the dbt, LookML, and Power BI layers
 pip install -r platforms/dbt/requirements.txt -r platforms/looker/requirements.txt
 dbt build --project-dir platforms/dbt --profiles-dir platforms/dbt
-pytest tests/ -v                          # now also runs dbt parity + LookML coverage
+pytest tests/ -v                          # now also runs dbt parity + LookML / Power BI coverage
 
 shiny run platforms/shiny/app.py          # http://127.0.0.1:8000
 python platforms/slack-bot/bot.py         # interactive terminal wizard
@@ -136,8 +140,8 @@ platforms/shiny/            working dashboard
 platforms/slack-bot/        working local-mock Slack bot
 platforms/dbt/              working dbt project: staging → marts → one model per metric
 platforms/looker/           LookML model + views on the dbt marts, tagged to the registry
-platforms/powerbi/          documented adapter contract, not built
-tests/                      golden-query, dbt parity, and LookML coverage tests
+platforms/powerbi/          Power BI project (PBIP): TMDL semantic model on the dbt marts, tagged to the registry
+tests/                      golden-query, dbt parity, and LookML / Power BI coverage tests
 .github/workflows/          CI gate enforcing the tests above on every PR
 docs/                       architecture, governance, verification, and worktree docs
 CLAUDE.md                   the contract Claude reads before touching this repo

@@ -1,0 +1,21 @@
+model Model
+	culture: en-US
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	discourageImplicitMeasures
+	sourceQueryCulture: en-US
+	dataAccessOptions
+		legacyRedirects
+		returnErrorValuesAsNull
+
+annotation __PBI_TimeIntelligenceEnabled = 0
+
+annotation PBI_QueryOrder = ["WarehousePath","fct_order_items","fct_orders","dim_customers","metric_cac_by_channel","metric_ltv_90d","metric_churn_rate_90d","metric_acquisition_funnel"]
+
+ref table fct_order_items
+ref table fct_orders
+ref table dim_customers
+ref table metric_cac_by_channel
+ref table metric_ltv_90d
+ref table metric_churn_rate_90d
+ref table metric_acquisition_funnel
+
