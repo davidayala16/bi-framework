@@ -20,6 +20,8 @@ flowchart LR
     DBT["dbt models<br/>staging → marts → metrics"] --> LOOKER["LookML views"]
     REG -.parity tests.-> DBT
     REG -.coverage tests.-> LOOKER
+    DBT --> PBI["Power BI project"]
+    REG -.coverage tests.-> PBI
     REG --> TESTS["golden-query tests"] --> CI["CI gate on every PR"]
 ```
 
@@ -46,9 +48,12 @@ Give an analytics team a repo where:
   a tested warehouse table, and parity tests fail CI if any dbt model
   disagrees with the registry. A **LookML** layer on top of the dbt marts
   exposes every metric in Looker, with coverage tests that keep each
-  measure tied to its registry entry. Power BI remains a documented
-  adapter contract. See [`platforms/dbt`](platforms/dbt/README.md) and
-  [`platforms/looker`](platforms/looker/README.md).
+  measure tied to its registry entry. A **Power BI** project (PBIP:
+  TMDL model + PBIR report) imports dbt's tables, with every DAX measure
+  annotated with its registry id and checked by coverage tests. See
+  [`platforms/dbt`](platforms/dbt/README.md),
+  [`platforms/looker`](platforms/looker/README.md), and
+  [`platforms/powerbi`](platforms/powerbi/README.md).
 
 Full write-up of the design decisions: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 Lessons from actually running this pattern: [`docs/FIELD_NOTES.md`](docs/FIELD_NOTES.md).
@@ -136,8 +141,8 @@ platforms/shiny/            working dashboard
 platforms/slack-bot/        working local-mock Slack bot
 platforms/dbt/              working dbt project: staging → marts → one model per metric
 platforms/looker/           LookML model + views on the dbt marts, tagged to the registry
-platforms/powerbi/          documented adapter contract, not built
-tests/                      golden-query, dbt parity, and LookML coverage tests
+platforms/powerbi/          Power BI project (TMDL + PBIR) on dbt exports, annotated to the registry
+tests/                      golden-query, dbt parity, LookML and Power BI coverage tests
 .github/workflows/          CI gate enforcing the tests above on every PR
 docs/                       architecture, governance, verification, and worktree docs
 CLAUDE.md                   the contract Claude reads before touching this repo

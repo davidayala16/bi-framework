@@ -15,3 +15,8 @@ platforms/dbt/logs/
 platforms/dbt/dbt_packages/
 platforms/dbt/.user.yml
 logs/
+
+# Power BI
+platforms/powerbi/data/
+platforms/powerbi/**/.pbi/localSettings.json
+platforms/powerbi/**/.pbi/cache.abf

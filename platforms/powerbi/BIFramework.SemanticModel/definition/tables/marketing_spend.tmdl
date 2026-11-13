@@ -1,0 +1,70 @@
+/// Monthly marketing spend by channel, imported from dbt's analytics.stg_marketing_spend. Unrelated to other tables for the same reason as dim_customers.
+table marketing_spend
+	lineageTag: bb1a0136-9fd7-5a61-b293-746511d818b4
+
+	/// Total marketing spend. Input to Customer Acquisition Cost.
+	measure 'Marketing Spend' = SUM(marketing_spend[spend])
+		formatString: \$#,0.00;(\$#,0.00);\$#,0.00
+		lineageTag: a52f8bcd-edcb-5d55-959a-e6c2db722791
+
+	/// Customers whose first order came through the channel. Input to Customer Acquisition Cost.
+	measure 'Acquired Customers' =
+			-- Customers whose first order came through the channel(s) in context.
+			-- Spend and acquired customers are aggregated separately and only then
+			-- divided, so spend is never fanned out across customer rows.
+			CALCULATE(
+			    COUNTROWS(dim_customers),
+			    TREATAS(VALUES(marketing_spend[channel]), dim_customers[first_order_channel])
+			)
+		formatString: #,0
+		lineageTag: 936cb351-ccc3-5fbb-a24c-5e7103db0f62
+
+	/// Total marketing spend on a channel divided by the number of distinct customers who placed a first order on that channel, over the full dataset window. A cohort metric — not filterable by dimension, since spend and first-order attribution are already channel-grained.
+	measure 'Customer Acquisition Cost by Channel' = DIVIDE([Marketing Spend], [Acquired Customers])
+		formatString: \$#,0.00;(\$#,0.00);\$#,0.00
+		lineageTag: 68d713c8-ff08-5f73-b923-7deefc29c39d
+
+		annotation registry_id = cac_by_channel
+
+	column spend_month
+		dataType: string
+		lineageTag: e83783ce-5f94-5570-b1fe-e62b3b84038f
+		summarizeBy: none
+		sourceColumn: spend_month
+
+		annotation SummarizationSetBy = User
+
+	column channel
+		dataType: string
+		lineageTag: ad840130-e13c-53f9-bc41-439c9572a2c0
+		summarizeBy: none
+		sourceColumn: channel
+
+		annotation SummarizationSetBy = User
+
+	column spend
+		dataType: double
+		isHidden
+		formatString: \$#,0.00;(\$#,0.00);\$#,0.00
+		lineageTag: 145618d2-a0c3-5923-b0a4-3368d51329a5
+		summarizeBy: none
+		sourceColumn: spend
+
+		annotation SummarizationSetBy = User
+
+	partition marketing_spend = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents(DataFolder & "\marketing_spend.csv"), [Delimiter = ",", Columns = 3, Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    Promoted = Table.PromoteHeaders(Source, [PromoteAllScalars = true]),
+				    // Empty CSV fields are SQL NULLs (e.g. LTV and churn for customers who
+				    // never ordered); keep them null so AVERAGE and COUNTROWS skip them.
+				    Nulls = Table.TransformColumns(Promoted, {}, each if _ = "" then null else _),
+				    // en-US culture: the CSVs use '.' decimals and ISO dates whatever the
+				    // locale of the machine running Power BI Desktop.
+				    Typed = Table.TransformColumnTypes(Nulls, {{"spend_month", type text}, {"channel", type text}, {"spend", type number}}, "en-US")
+				in
+				    Typed
+
+	annotation PBI_ResultType = Table

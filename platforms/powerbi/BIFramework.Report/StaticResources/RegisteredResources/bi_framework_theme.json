@@ -1,0 +1,15 @@
+{
+  "name": "bi-framework",
+  "dataColors": [
+    "#2a78d6",
+    "#eb6834",
+    "#1baf7a",
+    "#eda100",
+    "#e87ba4"
+  ],
+  "foreground": "#0b0b0b",
+  "foregroundNeutralSecondary": "#52514e",
+  "background": "#fcfcfb",
+  "backgroundLight": "#e1e0d9",
+  "tableAccent": "#2a78d6"
+}

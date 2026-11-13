@@ -1,0 +1,172 @@
+/// Order-item grain fact, imported from dbt's analytics.fct_order_items (the dbt build of the registry's base_fact_sql). Channel, region and category slicers filter this table only.
+table fct_order_items
+	lineageTag: 907812f0-10d5-5427-bd2c-6d243ac93233
+
+	/// Total revenue recognized across all order line items in the period. Gross of returns — there is no returns table in the synthetic dataset, so treat this as a simplified top-line figure.
+	measure 'Net Revenue' = SUM(fct_order_items[revenue])
+		formatString: \$#,0.00;(\$#,0.00);\$#,0.00
+		lineageTag: 4dfece03-795d-5dd9-ab95-18dca6ff35e0
+
+		annotation registry_id = net_revenue
+
+	/// Distinct orders. Input to Average Order Value.
+	measure 'Orders' = DISTINCTCOUNT(fct_order_items[order_id])
+		formatString: #,0
+		lineageTag: 0f8026cd-5d02-576e-bbb9-56409efa8f72
+
+	/// Net revenue divided by the number of distinct orders. Computed at the order grain, not the line-item grain, so multi-item orders aren't double counted.
+	measure 'Average Order Value' = DIVIDE([Net Revenue], [Orders])
+		formatString: \$#,0.00;(\$#,0.00);\$#,0.00
+		lineageTag: e9b29d6a-bc7f-5804-982e-dcdebaef7a13
+
+		annotation registry_id = aov
+
+	/// Share of customers with 2+ distinct orders (matching the filter), out of all customers with at least one order matching the filter.
+	measure 'Repeat Purchase Rate' =
+			-- Decided per customer *after* slicers apply: a customer with two orders
+			-- overall but one on paid_social is a one-time buyer when sliced to
+			-- paid_social. Same semantics as the registry's filterable formula.
+			VAR orders_per_customer =
+			    ADDCOLUMNS(
+			        VALUES(fct_order_items[customer_id]),
+			        "@orders", CALCULATE(DISTINCTCOUNT(fct_order_items[order_id]))
+			    )
+			VAR repeat_customers =
+			    COUNTROWS(FILTER(orders_per_customer, [@orders] >= 2)) + 0
+			RETURN
+			    100 * DIVIDE(repeat_customers, COUNTROWS(orders_per_customer))
+		formatString: 0.0"%"
+		lineageTag: 3468b2be-2499-5a1d-b4dc-640dfd73d537
+
+		annotation registry_id = repeat_purchase_rate
+
+	column order_item_id
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 9c499b8c-53f7-5e85-9857-b36df5e376ac
+		summarizeBy: none
+		sourceColumn: order_item_id
+
+		annotation SummarizationSetBy = User
+
+	column order_id
+		dataType: int64
+		formatString: 0
+		lineageTag: f0ad8b0e-c56f-5606-9447-bdc6207a4e51
+		summarizeBy: none
+		sourceColumn: order_id
+
+		annotation SummarizationSetBy = User
+
+	column order_date
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		lineageTag: e515be62-fa2a-5943-a791-63c12632b483
+		summarizeBy: none
+		sourceColumn: order_date
+
+		annotation SummarizationSetBy = User
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column customer_id
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 5b6cfc2a-d3c9-5a0d-8df9-6d39e5927a4e
+		summarizeBy: none
+		sourceColumn: customer_id
+
+		annotation SummarizationSetBy = User
+
+	column channel
+		dataType: string
+		lineageTag: 6aa95c07-dfca-5008-86e0-4c95c2876afd
+		summarizeBy: none
+		sourceColumn: channel
+
+		annotation SummarizationSetBy = User
+
+	column region
+		dataType: string
+		lineageTag: 4fdd0dbf-58e8-59f9-bd75-21ad74b068af
+		summarizeBy: none
+		sourceColumn: region
+
+		annotation SummarizationSetBy = User
+
+	column category
+		dataType: string
+		lineageTag: b6ba674c-a292-5af8-ad09-8173fdbd8741
+		summarizeBy: none
+		sourceColumn: category
+
+		annotation SummarizationSetBy = User
+
+	column product_id
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 660f3d51-7f5e-5d75-813a-1bdf5ad86089
+		summarizeBy: none
+		sourceColumn: product_id
+
+		annotation SummarizationSetBy = User
+
+	column quantity
+		dataType: int64
+		formatString: 0
+		lineageTag: 27252c9b-7cb5-5614-8a99-58a4f6024340
+		summarizeBy: none
+		sourceColumn: quantity
+
+		annotation SummarizationSetBy = User
+
+	column unit_price
+		dataType: double
+		isHidden
+		formatString: \$#,0.00;(\$#,0.00);\$#,0.00
+		lineageTag: 5f2cb72d-9c5e-5060-a8f4-7681a01f5ef1
+		summarizeBy: none
+		sourceColumn: unit_price
+
+		annotation SummarizationSetBy = User
+
+	column revenue
+		dataType: double
+		isHidden
+		formatString: \$#,0.00;(\$#,0.00);\$#,0.00
+		lineageTag: a8565669-d66b-5c09-8415-dcaf3085af22
+		summarizeBy: none
+		sourceColumn: revenue
+
+		annotation SummarizationSetBy = User
+
+	/// First day of the order's month, for the revenue trend axis.
+	column order_month = DATE(YEAR(fct_order_items[order_date]), MONTH(fct_order_items[order_date]), 1)
+		dataType: dateTime
+		formatString: mmm yyyy
+		lineageTag: e5a6da74-7598-586b-8d7d-8cb295d1fd2c
+		summarizeBy: none
+
+		annotation SummarizationSetBy = User
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	partition fct_order_items = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents(DataFolder & "\fct_order_items.csv"), [Delimiter = ",", Columns = 11, Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    Promoted = Table.PromoteHeaders(Source, [PromoteAllScalars = true]),
+				    // Empty CSV fields are SQL NULLs (e.g. LTV and churn for customers who
+				    // never ordered); keep them null so AVERAGE and COUNTROWS skip them.
+				    Nulls = Table.TransformColumns(Promoted, {}, each if _ = "" then null else _),
+				    // en-US culture: the CSVs use '.' decimals and ISO dates whatever the
+				    // locale of the machine running Power BI Desktop.
+				    Typed = Table.TransformColumnTypes(Nulls, {{"order_item_id", Int64.Type}, {"order_id", Int64.Type}, {"order_date", type date}, {"customer_id", Int64.Type}, {"channel", type text}, {"region", type text}, {"category", type text}, {"product_id", Int64.Type}, {"quantity", Int64.Type}, {"unit_price", type number}, {"revenue", type number}}, "en-US")
+				in
+				    Typed
+
+	annotation PBI_ResultType = Table

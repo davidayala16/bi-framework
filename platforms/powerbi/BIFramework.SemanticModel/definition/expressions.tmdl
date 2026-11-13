@@ -1,0 +1,6 @@
+/// Folder holding the CSVs written by platforms/powerbi/export_dbt_tables.py.
+/// Set it to the absolute path that script prints (Transform data > Edit parameters).
+expression DataFolder = "C:\bi-framework\platforms\powerbi\data" meta [IsParameterQuery = true, Type = "Text", IsParameterQueryRequired = true]
+	lineageTag: efea3ca3-c13d-5a14-a0fe-f34ce0157b8d
+
+	annotation PBI_ResultType = Text
