@@ -4,9 +4,11 @@ sources:
   - name: raw
     description: >
       Synthetic DTC e-commerce tables written by data/generate_synthetic_data.py
-      into the warehouse's default schema. Fabricated with a fixed seed; no
+      into DuckDB's default schema, or loaded into a cloud
+      warehouse by scripts/load_synthetic_to_warehouse.py. Fabricated with a fixed seed; no
       real company data.
-    schema: main
+    # `main` on DuckDB, `raw` on cloud targets; see macros/raw_schema.sql.
+    schema: "{{ env_var('BI_FRAMEWORK_RAW_SCHEMA', 'main' if target.type == 'duckdb' else 'raw') }}"
     tables:
       - name: customers
       - name: orders

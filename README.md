@@ -53,6 +53,17 @@ Give an analytics team a repo where:
   checked in CI. See [`platforms/dbt`](platforms/dbt/README.md),
   [`platforms/looker`](platforms/looker/README.md), and
   [`platforms/powerbi`](platforms/powerbi/README.md).
+- **Warehouse-agnostic.** The dbt project runs unchanged on DuckDB,
+  Snowflake, Databricks, and Redshift: dialect differences live in a few
+  cross-database macros, connections in `profiles.yml` targets that read
+  every credential from environment variables. DuckDB is the default and
+  the only target CI runs, so CI needs no credentials; the cloud targets
+  are opt-in, with a load script and parity tests you run against your own
+  account. [What CI does and doesn't verify](platforms/dbt/README.md#what-has-and-hasnt-been-verified).
+- **Warehouse-native semantic layers, generated.** A script turns the
+  registry into a Snowflake semantic view and Databricks Unity Catalog
+  metric views, and CI runs every exported expression on DuckDB against
+  the registry. See [`platforms/semantic_layer`](platforms/semantic_layer/README.md).
 
 Full write-up of the design decisions: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 Lessons from actually running this pattern: [`docs/FIELD_NOTES.md`](docs/FIELD_NOTES.md).
@@ -92,6 +103,12 @@ pytest tests/ -v                          # golden-query verification suite
 pip install -r platforms/dbt/requirements.txt -r platforms/looker/requirements.txt
 dbt build --project-dir platforms/dbt --profiles-dir platforms/dbt
 pytest tests/ -v                          # now also runs dbt parity + LookML / Power BI coverage
+
+# optional: the same dbt project on Snowflake / Databricks / Redshift
+# (your own credentials; see platforms/dbt/README.md#run-on-a-cloud-warehouse)
+python scripts/load_synthetic_to_warehouse.py --target snowflake
+dbt build --project-dir platforms/dbt --profiles-dir platforms/dbt --target snowflake
+DBT_PARITY_TARGET=snowflake pytest tests/test_dbt_parity.py -v
 
 shiny run platforms/shiny/app.py          # http://127.0.0.1:8000
 python platforms/slack-bot/bot.py         # interactive terminal wizard
@@ -139,6 +156,8 @@ platforms/palette.py        shared, dataviz-validated chart palette (both workin
 platforms/shiny/            working dashboard
 platforms/slack-bot/        working local-mock Slack bot
 platforms/dbt/              working dbt project: staging → marts → one model per metric
+platforms/semantic_layer/   generated Snowflake semantic view + Databricks metric views
+scripts/                    cloud warehouse loader, semantic layer export
 platforms/looker/           LookML model + views on the dbt marts, tagged to the registry
 platforms/powerbi/          Power BI project (PBIP): TMDL semantic model on the dbt marts, tagged to the registry
 tests/                      golden-query, dbt parity, and LookML / Power BI coverage tests

@@ -1,25 +1,11 @@
-# CAC inputs at channel grain. Spend and acquired customers are aggregated
-# separately before joining (the same fix applied to the registry formula),
-# so spend is never fanned out across customer rows. Keeping both inputs as
-# additive measures means CAC is also correct when channels are combined.
+# CAC inputs at channel grain, built by dbt
+# (platforms/dbt/models/marts/channel_acquisition.sql). Spend and acquired
+# customers are aggregated separately before joining (the same fix applied
+# to the registry formula), so spend is never fanned out across customer
+# rows. Keeping both inputs as additive measures means CAC is also correct
+# when channels are combined.
 view: channel_acquisition_cost {
-  derived_table: {
-    sql:
-      WITH spend AS (
-        SELECT channel, SUM(spend) AS spend
-        FROM analytics.stg_marketing_spend
-        GROUP BY channel
-      ),
-      acquired AS (
-        SELECT first_order_channel AS channel, COUNT(*) AS acquired_customers
-        FROM analytics.dim_customers
-        WHERE first_order_channel IS NOT NULL
-        GROUP BY first_order_channel
-      )
-      SELECT s.channel, s.spend, a.acquired_customers
-      FROM spend s
-      LEFT JOIN acquired a ON a.channel = s.channel ;;
-  }
+  sql_table_name: analytics.channel_acquisition ;;
 
   dimension: channel {
     primary_key: yes
