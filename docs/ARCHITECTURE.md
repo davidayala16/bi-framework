@@ -22,11 +22,11 @@ flowchart TD
 
     RES --> SHINY["platforms/shiny<br/>(working dashboard)"]
     RES --> SLACK["platforms/slack-bot<br/>(working local mock)"]
-    RES -.contract only.-> PBI["platforms/powerbi"]
 
     DBT["platforms/dbt<br/>(staging → marts → metric models)"]
     LOOKER["platforms/looker<br/>(LookML on dbt marts)"]
     DATA --> DBT --> LOOKER
+    DBT --> PBI["platforms/powerbi<br/>(PBIP on dbt exports)"]
 
     TESTS["tests/<br/>golden-query, dbt parity, LookML coverage"]
     CI[".github/workflows/verify-metrics.yml"]
@@ -103,10 +103,12 @@ agent, several, or none at all.
   instance behind the demo, so CI verifies coverage, labels, and that
   LookML reads only dbt tables rather than running Looker queries (see
   `platforms/looker/README.md`).
-- **Documented but not built:** the Power BI adapter. dbt and Looker were
-  built because they test something new: whether the registry can govern
-  a transformation layer and a semantic layer that don't import the
-  resolver at all. A third BI tool would prove the same point again.
+- **Real code, structurally tested:** the Power BI project (TMDL semantic
+  model + PBIR report). Power BI Desktop doesn't run in CI, so CI checks
+  registry coverage, names and descriptions, that the model imports only
+  dbt exports, that slicers can't reach cohort metrics, and that every
+  report field exists in the model (see `platforms/powerbi/README.md`).
+  It hasn't yet been opened in Desktop.
 
 ## How this scales past a demo
 

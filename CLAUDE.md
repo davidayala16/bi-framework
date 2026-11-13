@@ -62,8 +62,11 @@ exception: they're SQL layers that can't call the resolver, so they're
 governed by tests instead (`tests/test_dbt_parity.py`,
 `tests/test_lookml_coverage.py`). LookML must read only from dbt's
 `analytics` schema, and every governed measure carries a
-`registry:<metric_id>` tag. Power BI is documented only. Don't build
-another platform without checking with whoever's driving the repo first.
+`registry:<metric_id>` tag. Power BI (`platforms/powerbi/`, a PBIP project)
+is governed the same way by `tests/test_powerbi_coverage.py`: it imports
+only the CSVs `export_dbt_tables.py` writes from dbt's `analytics` schema,
+and every governed DAX measure carries `annotation registry_id =
+<metric_id>`. Don't build another platform without checking with whoever's driving the repo first.
 
 ## Scope
 

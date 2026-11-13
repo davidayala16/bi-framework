@@ -1,0 +1,155 @@
+/// Customer grain, imported from dbt's analytics.dim_customers. Holds the cohort metrics. Deliberately has no relationships, so report slicers can't filter cohort metrics (registry filterable_dimensions: []).
+table dim_customers
+	lineageTag: ae684455-e367-562d-bd39-db76fff7d0bc
+
+	/// Average net revenue generated per customer within 90 days of their first order. A simplified LTV proxy — no discounting, no margin adjustment — intentionally, to keep the definition auditable at a glance rather than modeling-accurate. A cohort metric — not filterable by dimension in this demo.
+	measure '90-Day Customer Lifetime Value' = AVERAGE(dim_customers[revenue_first_90d])
+		formatString: \$#,0.00;(\$#,0.00);\$#,0.00
+		lineageTag: 7f0a8ad4-5f93-51ac-a0f6-fdfae8543559
+
+		annotation registry_id = ltv_90d
+
+	/// Purchasing customers whose last order is 90+ days before the dataset's last order date.
+	measure 'Churned Customers' = CALCULATE(COUNTROWS(dim_customers), dim_customers[is_churned_90d] = TRUE()) + 0
+		formatString: #,0
+		isHidden
+		lineageTag: fa8b6744-dfad-5866-8dc4-072286b55ea7
+
+	/// Customers with at least one order.
+	measure 'Purchasing Customers' = CALCULATE(COUNTROWS(dim_customers), dim_customers[order_count] > 0)
+		formatString: #,0
+		isHidden
+		lineageTag: 974bb0a7-4aa6-5250-903c-04772f06e042
+
+	/// Share of customers whose most recent order is more than 90 days before the dataset's max order date, i.e. customers who have gone quiet for a full quarter. A snapshot definition, not a rolling one, and not filterable by dimension in this demo.
+	measure '90-Day Churn Rate' = 100 * DIVIDE([Churned Customers], [Purchasing Customers])
+		formatString: 0.0"%"
+		lineageTag: 9db31f48-ac97-5d3f-8cd1-19aa3db38f67
+
+		annotation registry_id = churn_rate_90d
+
+	/// For each acquisition channel, how many customers ended up Never Purchased / One-Time Buyer / Repeat Buyer. A cohort metric — uses the customer's original acquisition_channel (fixed at signup), not the per-order channel used elsewhere in the registry, and isn't filterable by dimension for the same reason cac_by_channel isn't.
+	measure 'Customers' = COUNTROWS(dim_customers)
+		formatString: #,0
+		lineageTag: cb3b3578-c8f1-5d29-b9e8-82ce7ea9296a
+
+		annotation registry_id = acquisition_funnel
+
+	column customer_id
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: d96c19de-fcf2-5cfe-8751-c4091d96a079
+		summarizeBy: none
+		sourceColumn: customer_id
+
+		annotation SummarizationSetBy = User
+
+	column signup_date
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		lineageTag: 86f19efb-1f01-5631-ad82-42479ef80432
+		summarizeBy: none
+		sourceColumn: signup_date
+
+		annotation SummarizationSetBy = User
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column acquisition_channel
+		dataType: string
+		lineageTag: bb19fb57-0a1d-50c6-b0b6-8b0ba3616f6a
+		summarizeBy: none
+		sourceColumn: acquisition_channel
+
+		annotation SummarizationSetBy = User
+
+	column region
+		dataType: string
+		lineageTag: 96180725-16e6-5df6-beb3-78e8d8130e3d
+		summarizeBy: none
+		sourceColumn: region
+
+		annotation SummarizationSetBy = User
+
+	column first_order_date
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		lineageTag: e8584e9f-03ec-5883-ac3f-ac3357f289db
+		summarizeBy: none
+		sourceColumn: first_order_date
+
+		annotation SummarizationSetBy = User
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column last_order_date
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		lineageTag: 7cac2a4d-972c-53d9-94ec-319b89048b2a
+		summarizeBy: none
+		sourceColumn: last_order_date
+
+		annotation SummarizationSetBy = User
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column first_order_channel
+		dataType: string
+		lineageTag: 90a32e93-4e24-5332-ac99-ae3e63593236
+		summarizeBy: none
+		sourceColumn: first_order_channel
+
+		annotation SummarizationSetBy = User
+
+	column order_count
+		dataType: int64
+		formatString: 0
+		lineageTag: 13bb5510-b140-5b64-9977-b85747f1e2be
+		summarizeBy: none
+		sourceColumn: order_count
+
+		annotation SummarizationSetBy = User
+
+	column revenue_first_90d
+		dataType: double
+		isHidden
+		formatString: \$#,0.00;(\$#,0.00);\$#,0.00
+		lineageTag: 2e4bdfbb-c83b-5d28-82f9-44911c061ffe
+		summarizeBy: none
+		sourceColumn: revenue_first_90d
+
+		annotation SummarizationSetBy = User
+
+	column purchase_outcome
+		dataType: string
+		lineageTag: aac1da1c-5fb5-5506-83ad-6484ba072204
+		summarizeBy: none
+		sourceColumn: purchase_outcome
+
+		annotation SummarizationSetBy = User
+
+	column is_churned_90d
+		dataType: boolean
+		lineageTag: 132f8f49-6f1b-502d-9e83-d18e74b924ae
+		summarizeBy: none
+		sourceColumn: is_churned_90d
+
+		annotation SummarizationSetBy = User
+
+	partition dim_customers = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents(DataFolder & "\dim_customers.csv"), [Delimiter = ",", Columns = 11, Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    Promoted = Table.PromoteHeaders(Source, [PromoteAllScalars = true]),
+				    // Empty CSV fields are SQL NULLs (e.g. LTV and churn for customers who
+				    // never ordered); keep them null so AVERAGE and COUNTROWS skip them.
+				    Nulls = Table.TransformColumns(Promoted, {}, each if _ = "" then null else _),
+				    // en-US culture: the CSVs use '.' decimals and ISO dates whatever the
+				    // locale of the machine running Power BI Desktop.
+				    Typed = Table.TransformColumnTypes(Nulls, {{"customer_id", Int64.Type}, {"signup_date", type date}, {"acquisition_channel", type text}, {"region", type text}, {"first_order_date", type date}, {"last_order_date", type date}, {"first_order_channel", type text}, {"order_count", Int64.Type}, {"revenue_first_90d", type number}, {"purchase_outcome", type text}, {"is_churned_90d", type logical}}, "en-US")
+				in
+				    Typed
+
+	annotation PBI_ResultType = Table
